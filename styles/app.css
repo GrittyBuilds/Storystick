@@ -1328,30 +1328,332 @@ body[data-mode='paper'] .status-message.is-error {
 
 /* --- responsive -------------------------------------------------------- */
 
-@media (max-width: 1100px) {
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.menu-item {
+  text-align: left;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ss-blueprint);
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 500;
+  min-height: 48px;
+  padding: 0 12px;
+}
+
+.menu-item:hover {
+  background: var(--ss-vellum);
+}
+
+/* --- mobile shell ------------------------------------------------------ */
+
+.menu-btn {
+  display: none;
+  width: 44px;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.mobile-bar {
+  display: none;
+  gap: var(--ss-space-4);
+  padding: var(--ss-space-8) var(--ss-space-12);
+  padding-bottom: calc(var(--ss-space-8) + env(safe-area-inset-bottom, 0px));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.mobile-bar button {
+  flex: 1 1 0;
+  min-height: 44px;
+  border: 1px solid var(--btn-2-border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--btn-2-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mobile-bar button.on {
+  background: var(--ss-blue);
+  border-color: var(--ss-blue);
+  color: #fff;
+}
+
+.sheet-head {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ss-space-12);
+  padding: var(--ss-space-8) var(--ss-space-16);
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  z-index: 1;
+}
+
+.sheet-head span {
+  font-family: var(--brand);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+/* Hidden unless a sheet is actually open — a full-screen overlay left visible
+   swallows every click in the app. */
+.sheet-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 24, 38, 0.45);
+  z-index: 25;
+}
+
+body.sheet-open .sheet-backdrop {
+  display: block;
+}
+
+@media (max-width: 1100px) and (min-width: 861px) {
   .sidebar {
     width: 232px;
   }
 }
 
-@media (max-width: 900px) {
-  .toolbar {
-    width: 60px;
+@media (max-width: 860px) {
+  body {
+    font-size: 15px;
   }
-  .tool-btn {
-    justify-content: center;
+
+  .topbar {
+    height: 52px;
+    gap: var(--ss-space-8);
   }
-  .tool-btn span {
-    display: none;
+
+  .brand-logo {
+    height: 22px;
   }
-  .tool-group-label {
-    font-size: 8px;
-    text-align: center;
-    margin-left: 0;
-  }
+
   .project-path,
   .options-hint {
     display: none;
+  }
+
+  .menu-btn {
+    display: inline-flex;
+  }
+
+  /* The full action row lives in the menu sheet on a phone. */
+  .top-actions {
+    display: none;
+  }
+
+  .toolbar {
+    order: 3;
+    width: 100%;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--ss-space-4);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    padding: var(--ss-space-8);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workspace {
+    flex-direction: column;
+  }
+
+  .canvas-wrap {
+    order: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .tool-group-label {
+    display: none;
+  }
+
+  .tool-group {
+    flex-direction: row;
+    gap: var(--ss-space-4);
+  }
+
+  .tool-btn {
+    flex-direction: column;
+    gap: 2px;
+    width: 62px;
+    min-width: 62px;
+    min-height: 56px;
+    justify-content: center;
+    font-size: 10px;
+    padding: 6px 2px;
+  }
+
+  .tool-btn span {
+    display: block;
+  }
+
+  .mobile-bar {
+    display: flex;
+  }
+
+  /* The sidebar becomes a bottom sheet. */
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 68vh;
+    z-index: 30;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    box-shadow: var(--sh-3);
+    transform: translateY(102%);
+    transition: transform 0.22s ease;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  body.sheet-open .sidebar {
+    transform: translateY(0);
+  }
+
+  .sheet-head {
+    display: flex;
+  }
+
+  .sidebar::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    margin: 8px auto 0;
+    flex: 0 0 auto;
+  }
+
+  .statusbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: var(--ss-space-8);
+    padding: var(--ss-space-8) var(--ss-space-12);
+  }
+
+  #status-coords {
+    min-width: 0;
+    flex: 1 1 100%;
+    order: 1;
+  }
+
+  .toggles {
+    order: 2;
+  }
+
+  .command {
+    order: 3;
+    flex: 1 1 auto;
+  }
+
+  .command input {
+    width: 100%;
+    min-width: 120px;
+    height: 40px;
+  }
+
+  .command span {
+    display: none;
+  }
+
+  .status-message {
+    order: 4;
+    flex: 1 1 100%;
+    white-space: normal;
+  }
+
+  .view-switch button,
+  .mode-switch button,
+  .view-presets button {
+    min-height: 40px;
+  }
+
+  .view-presets {
+    max-width: calc(100vw - 24px);
+    overflow-x: auto;
+  }
+
+  .modal-root {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-height: 88vh;
+    border-radius: var(--r-xl);
+  }
+
+  .modal-body,
+  .modal-head,
+  .modal-foot {
+    padding-left: var(--ss-space-16);
+    padding-right: var(--ss-space-16);
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .summary-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .card-grid,
+  .export-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Coarse pointers get the brand's 40 px minimum touch target everywhere. */
+@media (pointer: coarse) {
+  .btn.tiny,
+  .toggle,
+  .page-item,
+  .layer-row,
+  .project-name,
+  .menu-item,
+  .view-switch button,
+  .mode-switch button,
+  .view-presets button,
+  .link {
+    min-height: 40px;
+  }
+
+  .layer-row .eye,
+  .layer-row .lock {
+    width: 32px;
+    height: 40px;
   }
 }
 

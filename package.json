@@ -1,14 +1,17 @@
 {
   "name": "storystick",
   "version": "1.0.0",
-  "description": "Storystick — design blueprints and plans for structures, buildings, renovations and woodworking projects.",
+  "description": "Storystick — draw it before you build it. Plans for buildings, renovations and woodworking projects, with 3D, cut lists, code checks and estimates.",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --test \"test/*.test.js\"",
-    "smoke": "node test/smoke.browser.mjs"
+    "smoke": "node test/smoke.browser.mjs",
+    "desktop": "electron desktop/main.cjs",
+    "desktop:install": "npm install --no-save electron",
+    "smoke:mobile": "node test/smoke.mobile.mjs"
   },
   "keywords": [
     "cad",
@@ -17,7 +20,10 @@
     "woodworking",
     "cut-list",
     "drafting",
-    "renovation"
+    "renovation",
+    "3d",
+    "building-code",
+    "michigan"
   ],
   "license": "MIT",
   "private": true,

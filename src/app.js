@@ -13,7 +13,7 @@ import {
   removePage,
   cloneProject,
 } from './core/document.js';
-import { uid, bboxOfMany, translate, findEntity, wallLength } from './core/entities.js';
+import { uid, bboxOfMany, translate, findEntity, wallLength, hitTest } from './core/entities.js';
 import { History } from './core/history.js';
 import { resolveSnap, applyConstraint, SNAP_LABELS } from './core/snap.js';
 import { Viewport } from './render/viewport.js';
@@ -33,6 +33,9 @@ import {
 import { CANVAS_MODES } from './render/theme.js';
 import { buildModel } from './model3d/build.js';
 import { Viewer3D, isWebglAvailable } from './model3d/viewer.js';
+import { CanvasInput } from './ui/canvas-input.js';
+import { initInstall, canInstall, promptInstall, isIosSafari, isStandalone } from './ui/install.js';
+import { initDesktop, isDesktop, openTextFile } from './ui/desktop.js';
 import { renderToolbar, renderToolOptions } from './ui/toolbar.js';
 import { renderLayers, renderPages, renderProperties } from './ui/panels.js';
 import {
@@ -46,6 +49,7 @@ import {
   exportDialog,
   pageDialog,
   helpDialog,
+  menuDialog,
 } from './ui/dialogs.js';
 import { downloadText } from './ui/dom.js';
 
@@ -64,7 +68,6 @@ export class App {
     this.snap = null;
     this.pointer = { x: 0, y: 0 };
     this.modelPoint = { x: 0, y: 0 };
-    this.panning = null;
     this.spaceDown = false;
     this.dirty = false;
     this.autosaveTimer = null;
@@ -72,6 +75,8 @@ export class App {
     this.canvasMode = loadCanvasMode();
     document.body.dataset.mode = this.canvasMode;
 
+    this.activeSheet = null;
+    this.installAvailable = false;
     this.canvas3d = document.getElementById('canvas3d');
     this.viewMode = '2d';
     this.viewer = null;
@@ -497,6 +502,7 @@ export class App {
       page: this.page,
       viewport: this.viewport,
       mode: this.canvasMode,
+      touchTarget: this.input && this.input.usingTouch ? this.modelPoint : null,
       selection: this.selection,
       hover: this.hover,
       snap: this.snap,
@@ -504,6 +510,131 @@ export class App {
       preview: this.activeTool.preview(),
     });
     this.refreshCoords();
+  }
+
+  // --- desktop ----------------------------------------------------------
+
+  /** Application-menu actions, shared with the Electron menu template. */
+  desktopActions() {
+    return {
+      new: () => templateGallery(this),
+      open: () => this.openViaDesktop(),
+      save: () => this.saveNow(),
+      'save-as': () => exportDialog(this),
+      export: () => exportDialog(this),
+      print: () => window.print(),
+      undo: () => this.undo(),
+      redo: () => this.redo(),
+      'select-all': () => this.selectAll(),
+      duplicate: () => this.duplicateSelection(),
+      delete: () => this.deleteSelection(),
+      'view-2d': () => this.setViewMode('2d'),
+      'view-3d': () => this.setViewMode('3d'),
+      'mode-blueprint': () => this.setCanvasMode('blueprint'),
+      'mode-paper': () => this.setCanvasMode('paper'),
+      fit: () => (this.viewMode === '3d' ? this.setModelView('fit') : this.zoomFit()),
+      cutlist: () => cutListDialog(this),
+      schedules: () => scheduleDialog(this),
+      estimate: () => estimateDialog(this),
+      settings: () => settingsDialog(this),
+      help: () => helpDialog(),
+    };
+  }
+
+  async openViaDesktop() {
+    const file = await openTextFile();
+    if (file && file.text) this.importProjectText(file.text);
+  }
+
+  // --- install ----------------------------------------------------------
+
+  setInstallAvailable(available) {
+    this.installAvailable = available;
+    const button = document.getElementById('btn-install');
+    if (button) button.hidden = !available;
+  }
+
+  async install() {
+    if (!canInstall()) {
+      this.setStatus(
+        isIosSafari()
+          ? 'Tap the Share button, then "Add to Home Screen" to install Storystick.'
+          : 'This browser has not offered an install prompt yet.'
+      );
+      return;
+    }
+    const outcome = await promptInstall();
+    if (outcome === 'accepted') this.setStatus('Installing Storystick…');
+    else this.setInstallAvailable(false);
+  }
+
+  // --- mobile sheets ----------------------------------------------------
+
+  /** Slide the sidebar up as a bottom sheet and scroll to the named panel. */
+  openSheet(name) {
+    if (!this.isCompact()) return;
+    document.body.classList.add('sheet-open');
+    const target = document.getElementById(`panel-${name === 'sheets' ? 'pages' : name}`);
+    if (target && target.parentElement) {
+      target.parentElement.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    this.activeSheet = name;
+    const title = document.getElementById('sheet-title');
+    if (title) title.textContent = { sheets: 'Sheets', layers: 'Layers', properties: 'Properties' }[name] || 'Panels';
+    this.refreshMobileBar();
+  }
+
+  closeSheet() {
+    document.body.classList.remove('sheet-open');
+    this.activeSheet = null;
+    this.refreshMobileBar();
+  }
+
+  toggleSheet(name) {
+    if (this.activeSheet === name && document.body.classList.contains('sheet-open')) {
+      this.closeSheet();
+    } else {
+      this.openSheet(name);
+    }
+  }
+
+  isCompact() {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 860px)').matches;
+  }
+
+  refreshMobileBar() {
+    for (const name of ['sheets', 'layers', 'properties']) {
+      const node = document.getElementById(`mob-${name}`);
+      if (node) node.classList.toggle('on', this.activeSheet === name);
+    }
+  }
+
+  /** On a phone the top action row collapses into one menu. */
+  openMenu() {
+    const actions = [
+      ['New project', () => templateGallery(this)],
+      ['Open…', () => openProjectDialog(this)],
+      ['Save', () => this.saveNow()],
+      ['Cut list', () => cutListDialog(this)],
+      ['Schedules', () => scheduleDialog(this)],
+      ['Estimate', () => estimateDialog(this)],
+      ['Export…', () => exportDialog(this)],
+      ['Settings', () => settingsDialog(this)],
+      ['Undo', () => this.undo()],
+      ['Redo', () => this.redo()],
+      ['Keyboard & touch help', () => helpDialog()],
+    ];
+    if (this.installAvailable) actions.unshift(['Install Storystick', () => this.install()]);
+    else if (isIosSafari() && !isStandalone()) {
+      actions.unshift([
+        'Install on iPhone / iPad',
+        () =>
+          this.setStatus(
+            'Tap the Share button, then "Add to Home Screen" to install Storystick.'
+          ),
+      ]);
+    }
+    menuDialog('Storystick', actions);
   }
 
   // --- 3D view ----------------------------------------------------------
@@ -666,13 +797,7 @@ export class App {
 
   // --- input ------------------------------------------------------------
 
-  screenPoint(event) {
-    const rect = this.canvas.getBoundingClientRect();
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  }
-
-  resolvePoint(event) {
-    const screen = this.screenPoint(event);
+  resolvePoint(screen, event) {
     const raw = this.viewport.toModel(screen);
     const anchor = this.activeTool.anchor;
     let orthoMode = null;
@@ -699,71 +824,78 @@ export class App {
   }
 
   bindCanvas() {
-    const c = this.canvas;
-    c.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    c.addEventListener('pointerdown', (e) => {
-      c.setPointerCapture(e.pointerId);
-      if (e.button === 1 || e.button === 2 || this.spaceDown) {
-        this.panning = this.screenPoint(e);
-        c.style.cursor = 'grabbing';
-        return;
-      }
-      if (e.button !== 0) return;
-      const pt = this.resolvePoint(e);
-      this.modelPoint = pt;
-      this.activeTool.onPointerDown(pt, e);
-      this.render();
-    });
-
-    c.addEventListener('pointermove', (e) => {
-      const screen = this.screenPoint(e);
-      if (this.panning) {
-        this.viewport.panByScreen(screen.x - this.panning.x, screen.y - this.panning.y);
-        this.panning = screen;
-        this.render();
-        return;
-      }
-      const pt = this.resolvePoint(e);
-      this.modelPoint = pt;
-      this.activeTool.onPointerMove(pt, e);
-      this.render();
-    });
-
-    const end = (e) => {
-      if (this.panning) {
-        this.panning = null;
-        c.style.cursor = this.spaceDown ? 'grab' : this.activeTool.constructor.cursor;
-        return;
-      }
-      const pt = this.resolvePoint(e);
-      this.activeTool.onPointerUp(pt, e);
-      this.refreshProperties();
-      this.render();
-    };
-    c.addEventListener('pointerup', end);
-    c.addEventListener('pointercancel', () => {
-      this.panning = null;
-      this.activeTool.reset();
-      this.render();
-    });
-
-    c.addEventListener('dblclick', (e) => {
-      const pt = this.resolvePoint(e);
-      this.activeTool.onDoubleClick(pt, e);
-      this.render();
-    });
-
-    c.addEventListener(
-      'wheel',
-      (e) => {
-        e.preventDefault();
-        const factor = Math.exp(-e.deltaY * 0.0015);
-        this.viewport.zoomAt(this.screenPoint(e), factor);
-        this.render();
+    this.input = new CanvasInput(
+      this.canvas,
+      {
+        pointDown: (screen, event) => {
+          const pt = this.resolvePoint(screen, event);
+          this.modelPoint = pt;
+          this.activeTool.onPointerDown(pt, event);
+          this.render();
+        },
+        pointMove: (screen, event) => {
+          const pt = this.resolvePoint(screen, event);
+          this.modelPoint = pt;
+          this.activeTool.onPointerMove(pt, event);
+          this.render();
+        },
+        pointUp: (screen, event) => {
+          const pt = this.resolvePoint(screen, event);
+          this.activeTool.onPointerUp(pt, event);
+          this.refreshProperties();
+          this.render();
+        },
+        doubleTap: (screen, event) => {
+          const pt = this.resolvePoint(screen, event);
+          this.activeTool.onDoubleClick(pt, event);
+          this.render();
+        },
+        longPress: (screen, event) => {
+          const pt = this.resolvePoint(screen, event);
+          this.onLongPress(pt, event);
+        },
+        panBy: (dx, dy) => {
+          this.viewport.panByScreen(dx, dy);
+          this.render();
+        },
+        zoomAt: (screen, factor) => {
+          this.viewport.zoomAt(screen, factor);
+          this.render();
+        },
+        cancel: () => {
+          this.activeTool.reset();
+          this.setMarquee(null);
+          this.render();
+        },
       },
-      { passive: false }
+      {
+        shouldPan: (event) =>
+          this.spaceDown || event.button === 1 || event.button === 2 || event.buttons === 4,
+        get touchOffset() {
+          return undefined;
+        },
+      }
     );
+  }
+
+  /**
+   * Long press is the touch stand-in for a right click: select whatever is under
+   * the point and open its properties, or offer the sheet if nothing is there.
+   */
+  onLongPress(pt) {
+    const tol = this.pickTolerance() * 1.6;
+    const list = this.page.entities;
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const layer = this.project.layers.find((l) => l.id === list[i].layer);
+      if (layer && (!layer.visible || layer.locked)) continue;
+      if (hitTest(list[i], this.page, pt, tol)) {
+        this.setSelection([list[i].id]);
+        this.openSheet('properties');
+        if (navigator.vibrate) navigator.vibrate(8);
+        return;
+      }
+    }
+    this.openSheet('layers');
   }
 
   setTool(id) {
@@ -1011,7 +1143,7 @@ export class App {
     };
 
     on('btn-new', () => templateGallery(this));
-    on('btn-open', () => openProjectDialog(this));
+    on('btn-open', () => (isDesktop() ? this.openViaDesktop() : openProjectDialog(this)));
     on('btn-save', () => this.saveNow());
     on('btn-export', () => exportDialog(this));
     on('btn-settings', () => settingsDialog(this));
@@ -1035,6 +1167,13 @@ export class App {
     on('toggle-ortho', () => this.toggleSetting('ortho'));
     on('mode-blueprint', () => this.setCanvasMode('blueprint'));
     on('mode-paper', () => this.setCanvasMode('paper'));
+    on('btn-menu', () => this.openMenu());
+    on('btn-install', () => this.install());
+    on('mob-sheets', () => this.toggleSheet('sheets'));
+    on('mob-layers', () => this.toggleSheet('layers'));
+    on('mob-properties', () => this.toggleSheet('properties'));
+    on('sheet-close', () => this.closeSheet());
+    on('sheet-backdrop', () => this.closeSheet());
     on('view-2d', () => this.setViewMode('2d'));
     on('view-3d', () => this.setViewMode('3d'));
     on('view-fit', () => this.setModelView('fit'));
@@ -1078,6 +1217,8 @@ export class App {
     this.refreshToggles();
     this.refreshModeSwitch();
     this.refreshViewSwitch();
+    initInstall(this);
+    initDesktop(this, this.desktopActions());
 
     // Canvas text is measured, so redraw once the brand faces have loaded.
     if (document.fonts && document.fonts.ready) {

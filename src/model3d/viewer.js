@@ -311,7 +311,11 @@ export class Viewer3D {
   attachControls() {
     const canvas = this.canvas;
     const onDown = (event) => {
-      canvas.setPointerCapture(event.pointerId);
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch {
+        /* capture is optional */
+      }
       this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
       if (this.pointers.size === 2) {
         const [a, b] = [...this.pointers.values()];
@@ -354,8 +358,12 @@ export class Viewer3D {
     const onUp = (event) => {
       this.pointers.delete(event.pointerId);
       if (this.pointers.size < 2) this.gesture = null;
-      if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
-        canvas.releasePointerCapture(event.pointerId);
+      try {
+        if (canvas.hasPointerCapture && canvas.hasPointerCapture(event.pointerId)) {
+          canvas.releasePointerCapture(event.pointerId);
+        }
+      } catch {
+        /* already released */
       }
     };
 

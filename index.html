@@ -30,6 +30,8 @@
         </div>
       </div>
 
+      <button id="btn-menu" class="btn tiny menu-btn" aria-label="Menu">⋯</button>
+
       <nav class="top-actions">
         <button id="btn-new" class="btn tiny">New</button>
         <button id="btn-open" class="btn tiny">Open</button>
@@ -44,6 +46,7 @@
         <span class="divider"></span>
         <button id="btn-export" class="btn tiny">Export</button>
         <button id="btn-settings" class="btn tiny">Settings</button>
+        <button id="btn-install" class="btn tiny" hidden>Install</button>
         <button id="btn-help" class="btn tiny" title="Keyboard shortcuts">?</button>
       </nav>
     </header>
@@ -81,6 +84,10 @@
       </section>
 
       <aside class="sidebar">
+        <div class="sheet-head">
+          <span id="sheet-title">Panels</span>
+          <button id="sheet-close" type="button" class="btn tiny">Done</button>
+        </div>
         <section class="panel">
           <h3>Sheets</h3>
           <div id="panel-pages"></div>
@@ -95,6 +102,14 @@
         </section>
       </aside>
     </main>
+
+    <nav class="mobile-bar" aria-label="Panels">
+      <button id="mob-sheets" type="button">Sheets</button>
+      <button id="mob-layers" type="button">Layers</button>
+      <button id="mob-properties" type="button">Properties</button>
+    </nav>
+
+    <div id="sheet-backdrop" class="sheet-backdrop"></div>
 
     <footer class="statusbar">
       <span id="status-coords">X 0"   Y 0"</span>

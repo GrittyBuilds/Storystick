@@ -704,6 +704,27 @@ export function pageDialog(app) {
   });
 }
 
+// --- compact menu ---------------------------------------------------------
+
+/** The phone stand-in for the desktop action row. */
+export function menuDialog(title, actions) {
+  const body = el(
+    'div',
+    { class: 'menu-list' },
+    actions.map(([label, run]) =>
+      el('button', {
+        class: 'menu-item',
+        text: label,
+        onclick: () => {
+          closeModal();
+          run();
+        },
+      })
+    )
+  );
+  openModal({ title, subtitle: TAGLINE, body });
+}
+
 // --- help -----------------------------------------------------------------
 
 export function helpDialog() {

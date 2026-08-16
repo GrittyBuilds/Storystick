@@ -95,6 +95,37 @@ export class Renderer {
     this.drawPreview(state);
     this.drawSnap(state);
     this.drawMarquee(state);
+    this.drawTouchTarget(state);
+  }
+
+  /**
+   * Touch input is offset above the fingertip; this crosshair shows exactly
+   * where the point will land so the finger never hides its own target.
+   */
+  drawTouchTarget(state) {
+    if (!state.touchTarget) return;
+    const { ctx } = this;
+    const { viewport: vp } = state;
+    const p = state.touchTarget;
+    const arm = vp.px(16);
+    const gap = vp.px(4);
+    ctx.setLineDash([]);
+    ctx.strokeStyle = this.pal.selection;
+    ctx.lineWidth = vp.px(1.5);
+    ctx.beginPath();
+    ctx.moveTo(p.x - arm, p.y);
+    ctx.lineTo(p.x - gap, p.y);
+    ctx.moveTo(p.x + gap, p.y);
+    ctx.lineTo(p.x + arm, p.y);
+    ctx.moveTo(p.x, p.y - arm);
+    ctx.lineTo(p.x, p.y - gap);
+    ctx.moveTo(p.x, p.y + gap);
+    ctx.lineTo(p.x, p.y + arm);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, vp.px(2), 0, Math.PI * 2);
+    ctx.fillStyle = this.pal.selection;
+    ctx.fill();
   }
 
   // --- stroke helpers ---------------------------------------------------
