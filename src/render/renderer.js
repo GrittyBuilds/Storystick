@@ -1,25 +1,22 @@
 // Canvas renderer. All drawing happens in model space via a world transform,
 // so line weights and UI-sized text divide by zoom to stay screen-constant.
+//
+// Colours come from src/render/theme.js — there are no raw hex values here —
+// and stroke weights are the brand's plotted millimetre weights carried on each
+// layer, converted to pixels at draw time.
 
 import * as g from '../core/geometry.js';
 import { formatLength, formatArea, IN_PER_FT, mmToIn } from '../core/units.js';
 import { outlines, wallSpans, openingFrame, wallLength, handlesOf } from '../core/entities.js';
-
-export const THEME = {
-  paper: '#f7f5f0',
-  gridMinor: '#e2ded4',
-  gridMajor: '#cfc9ba',
-  axis: '#b9b0a0',
-  accent: '#0b6bcb',
-  accentSoft: 'rgba(11,107,203,0.18)',
-  hover: '#f59e0b',
-  wallFill: '#d9d4c8',
-  wallFillExisting: '#e6e2d8',
-  roomFill: 'rgba(37,99,235,0.07)',
-  partFill: 'rgba(124,58,237,0.12)',
-  snap: '#16a34a',
-  text: '#1f2933',
-};
+import {
+  palette,
+  layerColor,
+  wallStatusColor,
+  mmToPx,
+  LINE_WEIGHT_MM,
+  FONT_SANS,
+  FONT_MONO,
+} from './theme.js';
 
 const RICH_PREVIEW = new Set(['wall', 'opening', 'dim', 'part', 'room']);
 
@@ -37,6 +34,11 @@ const Z_ORDER = {
   text: 6,
 };
 
+const DIM_TEXT_PX = 11;
+const LABEL_TEXT_PX = 12;
+const SNAP_PX = 6;
+const SELECTION_PX = 2;
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -44,6 +46,8 @@ export class Renderer {
     this.width = 0;
     this.height = 0;
     this.dpr = 1;
+    this.pal = palette('blueprint');
+    this.mode = 'blueprint';
   }
 
   /** Size an off-screen canvas explicitly (used by PNG export). */
@@ -67,8 +71,11 @@ export class Renderer {
   draw(state) {
     const { ctx } = this;
     const { viewport: vp } = state;
+    this.mode = state.mode === 'paper' ? 'paper' : 'blueprint';
+    this.pal = palette(this.mode);
+
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.fillStyle = THEME.paper;
+    ctx.fillStyle = this.pal.background;
     ctx.fillRect(0, 0, this.width, this.height);
 
     ctx.setTransform(
@@ -90,6 +97,40 @@ export class Renderer {
     this.drawMarquee(state);
   }
 
+  // --- stroke helpers ---------------------------------------------------
+
+  /** Stroke at a plotted millimetre weight. */
+  applyStroke(vp, color, weightMm, dash) {
+    const { ctx } = this;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = vp.px(Math.max(0.5, mmToPx(weightMm || LINE_WEIGHT_MM.surface)));
+    ctx.setLineDash(dash ? dash.map((d) => vp.px(d)) : []);
+  }
+
+  /** Stroke at a fixed screen pixel width (UI overlays, not drawing content). */
+  applyStrokePx(vp, color, px, dash) {
+    const { ctx } = this;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = vp.px(px);
+    ctx.setLineDash(dash ? dash.map((d) => vp.px(d)) : []);
+  }
+
+  path(pts, closed) {
+    const { ctx } = this;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i].x, pts[i].y);
+    if (closed) ctx.closePath();
+  }
+
+  strokeStyleFor(ent, layer) {
+    if (ent.type === 'wall') {
+      const status = wallStatusColor(ent.status, this.mode);
+      if (status) return status;
+    }
+    return { color: layerColor(layer, this.mode), dash: layer.dash };
+  }
+
   // --- background -------------------------------------------------------
 
   drawGrid(state) {
@@ -101,7 +142,7 @@ export class Renderer {
     const majorEvery = project.unitSystem === 'metric' ? mmToIn(1000) / minor : IN_PER_FT / minor;
     const major = minor * Math.max(1, Math.round(majorEvery));
 
-    const drawSet = (step, color, weight) => {
+    const drawSet = (step, color) => {
       if (step * vp.zoom < 9) return;
       ctx.beginPath();
       const x0 = Math.floor(box.minX / step) * step;
@@ -115,20 +156,21 @@ export class Renderer {
         ctx.lineTo(box.maxX, y);
       }
       ctx.strokeStyle = color;
-      ctx.lineWidth = vp.px(weight);
+      ctx.lineWidth = vp.px(1);
+      ctx.setLineDash([]);
       ctx.stroke();
     };
 
-    drawSet(minor, THEME.gridMinor, 1);
-    drawSet(major, THEME.gridMajor, 1);
+    drawSet(minor, this.pal.gridMinor);
+    drawSet(major, this.pal.gridMajor);
 
     ctx.beginPath();
     ctx.moveTo(box.minX, 0);
     ctx.lineTo(box.maxX, 0);
     ctx.moveTo(0, box.minY);
     ctx.lineTo(0, box.maxY);
-    ctx.strokeStyle = THEME.axis;
-    ctx.lineWidth = vp.px(1.2);
+    ctx.strokeStyle = this.pal.axis;
+    ctx.lineWidth = vp.px(1);
     ctx.stroke();
   }
 
@@ -143,7 +185,7 @@ export class Renderer {
     });
     visible.sort((a, b) => (Z_ORDER[a.type] ?? 2) - (Z_ORDER[b.type] ?? 2));
 
-    // Walls are drawn in two passes so a neighbour's fill never paints over an
+    // Walls are drawn in two passes so a neighbour's poché never paints over an
     // already-stroked wall at a corner.
     const walls = visible.filter((e) => e.type === 'wall');
     let wallsDrawn = false;
@@ -156,7 +198,7 @@ export class Renderer {
     for (const ent of visible) {
       if (ent.type === 'wall') continue;
       if (!wallsDrawn && (Z_ORDER[ent.type] ?? 2) > Z_ORDER.wall) drawWalls();
-      const layer = layers.get(ent.layer) || { color: '#333', weight: 1, dash: null };
+      const layer = layers.get(ent.layer) || { color: '#46525E', weight: LINE_WEIGHT_MM.surface, dash: null };
       this.drawEntity(ent, state, layer);
     }
     if (!wallsDrawn) drawWalls();
@@ -165,7 +207,7 @@ export class Renderer {
   drawWall(ent, state, layers, pass) {
     const { ctx } = this;
     const { viewport: vp, page } = state;
-    const layer = layers.get(ent.layer) || { color: '#333', weight: 1, dash: null };
+    const layer = layers.get(ent.layer) || { color: '#46525E', weight: LINE_WEIGHT_MM.sectionCut, dash: null };
     const style = this.strokeStyleFor(ent, layer);
     const total = wallLength(ent) || 1;
     if (pass === 'stroke') this.applyStroke(vp, style.color, layer.weight, style.dash);
@@ -174,36 +216,13 @@ export class Renderer {
       this.path(quad, true);
       if (pass === 'fill') {
         if (ent.status === 'demo') continue;
-        ctx.fillStyle = ent.status === 'existing' ? THEME.wallFillExisting : THEME.wallFill;
+        ctx.fillStyle = ent.status === 'existing' ? this.pal.wallFillExisting : this.pal.wallFill;
         ctx.fill();
       } else {
         ctx.stroke();
       }
     }
     ctx.setLineDash([]);
-  }
-
-  strokeStyleFor(ent, layer) {
-    if (ent.type === 'wall') {
-      if (ent.status === 'demo') return { color: '#c2410c', dash: [8, 5] };
-      if (ent.status === 'existing') return { color: '#8a94a6', dash: null };
-    }
-    return { color: layer.color, dash: layer.dash };
-  }
-
-  applyStroke(vp, color, weight, dash) {
-    const { ctx } = this;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = vp.px(Math.max(0.4, weight));
-    ctx.setLineDash(dash ? dash.map((d) => vp.px(d)) : []);
-  }
-
-  path(pts, closed) {
-    const { ctx } = this;
-    ctx.beginPath();
-    ctx.moveTo(pts[0].x, pts[0].y);
-    for (let i = 1; i < pts.length; i += 1) ctx.lineTo(pts[i].x, pts[i].y);
-    if (closed) ctx.closePath();
   }
 
   drawEntity(ent, state, layer) {
@@ -214,19 +233,19 @@ export class Renderer {
     switch (ent.type) {
       case 'room': {
         this.path(ent.pts, true);
-        ctx.fillStyle = THEME.roomFill;
+        ctx.fillStyle = this.pal.roomFill;
         ctx.fill();
         this.applyStroke(vp, style.color, layer.weight, style.dash);
         ctx.stroke();
         const c = g.polygonCentroid(ent.pts);
         const area = Math.abs(g.polygonArea(ent.pts));
-        this.label(vp, c, [ent.name, formatArea(area, project.unitSystem)], style.color);
+        this.label(vp, c, ent.name, formatArea(area, project.unitSystem), style.color);
         break;
       }
       case 'part': {
         const pts = g.rectCorners(ent.a, ent.b);
         this.path(pts, true);
-        ctx.fillStyle = THEME.partFill;
+        ctx.fillStyle = this.pal.partFill;
         ctx.fill();
         this.applyStroke(vp, style.color, layer.weight, style.dash);
         ctx.stroke();
@@ -234,30 +253,18 @@ export class Renderer {
         const h = Math.abs(ent.b.y - ent.a.y);
         const long = Math.max(w, h);
         const short = Math.min(w, h);
-        const lines = [
+        const size = `${formatLength(long, project.unitSystem, { forceInches: true })} × ${formatLength(
+          short,
+          project.unitSystem,
+          { forceInches: true }
+        )}`;
+        this.label(
+          vp,
+          g.lerp(ent.a, ent.b, 0.5),
           ent.qty > 1 ? `${ent.name} ×${ent.qty}` : ent.name,
-          `${formatLength(long, project.unitSystem, { forceInches: true })} × ${formatLength(
-            short,
-            project.unitSystem,
-            { forceInches: true }
-          )}`,
-        ];
-        this.label(vp, g.lerp(ent.a, ent.b, 0.5), lines, style.color);
-        break;
-      }
-      case 'wall': {
-        const spans = wallSpans(ent, page);
-        const total = wallLength(ent) || 1;
-        this.applyStroke(vp, style.color, layer.weight, style.dash);
-        for (const s of spans) {
-          const quad = g.thickSegmentQuad(ent.a, ent.b, ent.thickness, s[0] / total, s[1] / total);
-          this.path(quad, true);
-          if (ent.status !== 'demo') {
-            ctx.fillStyle = ent.status === 'existing' ? THEME.wallFillExisting : THEME.wallFill;
-            ctx.fill();
-          }
-          ctx.stroke();
-        }
+          size,
+          style.color
+        );
         break;
       }
       case 'opening': {
@@ -265,7 +272,7 @@ export class Renderer {
         break;
       }
       case 'dim': {
-        this.drawDimension(ent, state, style, layer);
+        this.drawDimension(ent, state, layer);
         break;
       }
       case 'text': {
@@ -273,7 +280,7 @@ export class Renderer {
         ctx.translate(ent.p.x, ent.p.y);
         if (ent.rot) ctx.rotate(ent.rot);
         ctx.fillStyle = style.color;
-        ctx.font = `${ent.size}px "Helvetica Neue", Arial, sans-serif`;
+        ctx.font = `400 ${ent.size}px ${FONT_SANS}`;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(ent.text, 0, 0);
@@ -325,7 +332,6 @@ export class Renderer {
     // Door: leaf perpendicular to the wall plus its swing arc.
     const hingeAtStart = ent.swing !== 'right';
     const hinge = hingeAtStart ? f.start : f.end;
-    const sign = ent.swing === 'right' ? -1 : 1;
     const leafDir = g.mul(f.normal, ent.flip ? -1 : 1);
     const leafEnd = g.add(hinge, g.mul(leafDir, ent.width));
     ctx.beginPath();
@@ -340,13 +346,12 @@ export class Renderer {
     while (sweep < -Math.PI) sweep += Math.PI * 2;
     ctx.beginPath();
     ctx.arc(hinge.x, hinge.y, ent.width, a0, a0 + sweep, sweep < 0);
-    this.applyStroke(vp, style.color, Math.max(0.6, layer.weight * 0.6), [4, 3]);
+    this.applyStroke(vp, style.color, LINE_WEIGHT_MM.construction, [4, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
-    void sign;
   }
 
-  drawDimension(ent, state, style, layer) {
+  drawDimension(ent, state, layer) {
     const { ctx } = this;
     const { viewport: vp, project } = state;
     const dir = g.norm(g.sub(ent.b, ent.a));
@@ -357,18 +362,26 @@ export class Renderer {
     const b2 = g.add(ent.b, off);
     const gap = g.mul(n, ent.offset >= 0 ? vp.px(3) : -vp.px(3));
     const over = g.mul(n, ent.offset >= 0 ? vp.px(6) : -vp.px(6));
+    const weight = layer.weight || LINE_WEIGHT_MM.dimension;
 
-    this.applyStroke(vp, style.color, Math.max(0.6, layer.weight * 0.8), null);
+    // Extension lines stay solid; the dimension line itself picks up the
+    // Blueprint-mode 3-2 dash from the brand canvas spec.
+    this.applyStroke(vp, this.pal.dimensionLine, weight, null);
     ctx.beginPath();
     ctx.moveTo(ent.a.x + gap.x, ent.a.y + gap.y);
     ctx.lineTo(a2.x + over.x, a2.y + over.y);
     ctx.moveTo(ent.b.x + gap.x, ent.b.y + gap.y);
     ctx.lineTo(b2.x + over.x, b2.y + over.y);
+    ctx.stroke();
+
+    this.applyStroke(vp, this.pal.dimensionLine, weight, this.pal.dimensionDash);
+    ctx.beginPath();
     ctx.moveTo(a2.x, a2.y);
     ctx.lineTo(b2.x, b2.y);
     ctx.stroke();
 
     // Architectural tick marks.
+    this.applyStroke(vp, this.pal.dimensionLine, weight, null);
     const tick = g.mul(g.norm(g.add(dir, n)), vp.px(5));
     ctx.beginPath();
     ctx.moveTo(a2.x - tick.x, a2.y - tick.y);
@@ -383,33 +396,40 @@ export class Renderer {
     });
     let angle = g.angleOf(dir);
     if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
-    const size = vp.px(12);
+    const size = vp.px(DIM_TEXT_PX);
     ctx.save();
     ctx.translate(mid.x, mid.y);
     ctx.rotate(angle);
-    ctx.font = `${size}px "Helvetica Neue", Arial, sans-serif`;
+    ctx.font = `500 ${size}px ${FONT_MONO}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     const w = ctx.measureText(text).width;
-    ctx.fillStyle = THEME.paper;
-    ctx.fillRect(-w / 2 - size * 0.2, -size * 1.15, w + size * 0.4, size * 1.1);
-    ctx.fillStyle = style.color;
-    ctx.fillText(text, 0, -size * 0.25);
+    ctx.fillStyle = this.pal.labelHalo;
+    ctx.fillRect(-w / 2 - size * 0.3, -size * 1.25, w + size * 0.6, size * 1.2);
+    ctx.fillStyle = this.pal.dimensionText;
+    ctx.fillText(text, 0, -size * 0.3);
     ctx.restore();
   }
 
-  /** Screen-constant multi-line label centred on a model point. */
-  label(vp, at, lines, color) {
+  /**
+   * Screen-constant label centred on a model point: the name is prose (Inter),
+   * the measurement is exact (IBM Plex Mono).
+   */
+  label(vp, at, name, value, color) {
     const { ctx } = this;
-    const size = vp.px(12);
-    ctx.font = `${size}px "Helvetica Neue", Arial, sans-serif`;
+    const size = vp.px(LABEL_TEXT_PX);
+    const valueSize = vp.px(DIM_TEXT_PX);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = color;
-    const start = at.y - ((lines.length - 1) * size * 1.25) / 2;
-    lines.forEach((line, i) => {
-      ctx.fillText(line, at.x, start + i * size * 1.25);
-    });
+    if (name) {
+      ctx.font = `500 ${size}px ${FONT_SANS}`;
+      ctx.fillText(name, at.x, value ? at.y - size * 0.65 : at.y);
+    }
+    if (value) {
+      ctx.font = `400 ${valueSize}px ${FONT_MONO}`;
+      ctx.fillText(value, at.x, name ? at.y + valueSize * 0.75 : at.y);
+    }
   }
 
   // --- overlays ---------------------------------------------------------
@@ -421,19 +441,20 @@ export class Renderer {
 
     if (hover && !selection.has(hover)) {
       const ent = byId.get(hover);
-      if (ent) this.outlineEntity(ent, state, THEME.hover, 2.5);
+      if (ent) this.outlineEntity(ent, state, this.pal.hover, SELECTION_PX);
     }
 
     for (const id of selection) {
       const ent = byId.get(id);
-      if (ent) this.outlineEntity(ent, state, THEME.accent, 2.5);
+      if (ent) this.outlineEntity(ent, state, this.pal.selection, SELECTION_PX);
     }
 
     if (selection.size && selection.size <= 4) {
       const size = vp.px(4);
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = THEME.accent;
+      ctx.fillStyle = this.pal.handleFill;
+      ctx.strokeStyle = this.pal.selection;
       ctx.lineWidth = vp.px(1.4);
+      ctx.setLineDash([]);
       for (const id of selection) {
         const ent = byId.get(id);
         if (!ent) continue;
@@ -447,10 +468,10 @@ export class Renderer {
     }
   }
 
-  outlineEntity(ent, state, color, weight) {
+  outlineEntity(ent, state, color, px) {
     const { ctx } = this;
     const { viewport: vp, page } = state;
-    this.applyStroke(vp, color, weight, null);
+    this.applyStrokePx(vp, color, px, null);
     for (const p of outlines(ent, page)) {
       if (p.pts.length < 2) {
         ctx.beginPath();
@@ -468,7 +489,10 @@ export class Renderer {
       ctx.stroke();
     }
     if (ent.type === 'text') {
-      const box = g.bboxOfPoints([ent.p, g.vec(ent.p.x + ent.text.length * ent.size * 0.6, ent.p.y - ent.size)]);
+      const box = g.bboxOfPoints([
+        ent.p,
+        g.vec(ent.p.x + ent.text.length * ent.size * 0.6, ent.p.y - ent.size),
+      ]);
       ctx.strokeRect(box.minX, box.minY, box.maxX - box.minX, box.maxY - box.minY);
     }
   }
@@ -478,13 +502,18 @@ export class Renderer {
     const { viewport: vp, preview } = state;
     if (!preview) return;
 
-    const ghostLayer = { color: THEME.accent, weight: 1.4, dash: [6, 4] };
+    const ghostLayer = {
+      color: this.pal.preview,
+      colorDark: this.pal.preview,
+      weight: LINE_WEIGHT_MM.surface,
+      dash: [6, 4],
+    };
     for (const ent of preview.entities || []) {
       if (RICH_PREVIEW.has(ent.type)) {
         this.drawEntity(ent, state, ghostLayer);
         continue;
       }
-      this.applyStroke(vp, THEME.accent, 1.6, [6, 4]);
+      this.applyStroke(vp, this.pal.preview, LINE_WEIGHT_MM.outline, [6, 4]);
       for (const p of outlines(ent, state.page)) {
         if (p.pts.length < 2) continue;
         this.path(p.pts, p.closed);
@@ -492,25 +521,25 @@ export class Renderer {
       }
     }
     for (const guide of preview.guides || []) {
-      this.applyStroke(vp, THEME.accent, 1, [3, 3]);
+      this.applyStroke(vp, this.pal.preview, LINE_WEIGHT_MM.construction, [3, 3]);
       this.path(guide, false);
       ctx.stroke();
     }
     if (preview.label && preview.labelAt) {
-      const size = vp.px(12);
-      ctx.font = `${size}px "Helvetica Neue", Arial, sans-serif`;
+      const size = vp.px(DIM_TEXT_PX);
+      ctx.font = `500 ${size}px ${FONT_MONO}`;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       const w = ctx.measureText(preview.label).width;
       const x = preview.labelAt.x + vp.px(14);
       const y = preview.labelAt.y - vp.px(14);
-      ctx.fillStyle = 'rgba(255,255,255,0.92)';
-      ctx.fillRect(x - vp.px(4), y - size * 0.75, w + vp.px(8), size * 1.5);
-      ctx.strokeStyle = THEME.accent;
-      ctx.lineWidth = vp.px(1);
       ctx.setLineDash([]);
-      ctx.strokeRect(x - vp.px(4), y - size * 0.75, w + vp.px(8), size * 1.5);
-      ctx.fillStyle = THEME.text;
+      ctx.fillStyle = this.pal.labelHalo;
+      ctx.fillRect(x - vp.px(6), y - size, w + vp.px(12), size * 2);
+      ctx.strokeStyle = this.pal.preview;
+      ctx.lineWidth = vp.px(1);
+      ctx.strokeRect(x - vp.px(6), y - size, w + vp.px(12), size * 2);
+      ctx.fillStyle = this.pal.dimensionText;
       ctx.fillText(preview.label, x, y);
     }
     ctx.setLineDash([]);
@@ -520,9 +549,9 @@ export class Renderer {
     const { ctx } = this;
     const { viewport: vp, snap } = state;
     if (!snap || !snap.kind) return;
-    const s = vp.px(5);
+    const s = vp.px(SNAP_PX);
     const p = snap.point;
-    ctx.strokeStyle = THEME.snap;
+    ctx.strokeStyle = this.pal.snap;
     ctx.lineWidth = vp.px(1.8);
     ctx.setLineDash([]);
     ctx.beginPath();
@@ -552,8 +581,8 @@ export class Renderer {
     if (!marquee) return;
     const { a, b, crossing } = marquee;
     ctx.setLineDash(crossing ? [vp.px(6), vp.px(4)] : []);
-    ctx.strokeStyle = crossing ? '#16a34a' : THEME.accent;
-    ctx.fillStyle = crossing ? 'rgba(22,163,74,0.10)' : THEME.accentSoft;
+    ctx.strokeStyle = crossing ? this.pal.marqueeCrossing : this.pal.marqueeWindow;
+    ctx.fillStyle = crossing ? this.pal.marqueeCrossingFill : this.pal.marqueeWindowFill;
     ctx.lineWidth = vp.px(1.2);
     ctx.beginPath();
     ctx.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));

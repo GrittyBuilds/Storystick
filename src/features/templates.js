@@ -188,7 +188,7 @@ function kitchenReno() {
 
   // Island as a woodworking part so it flows into the cut list.
   plan.entities.push(
-    makePart(pt(60, 54), pt(132, 90), 'parts', {
+    makePart(pt(138, 24), pt(210, 60), 'parts', {
       name: 'Island carcase panel',
       thickness: 0.75,
       material: 'ply-3/4',
@@ -198,7 +198,12 @@ function kitchenReno() {
   );
 
   plan.entities.push(makeDim(pt(0, 0), pt(W, 0), 'dimensions', -24));
-  plan.entities.push(makeText(pt(0, H + 36), 'Dashed orange = remove. Grey = existing to remain. Black = new work.', 'notes', 6));
+  plan.entities.push(makeText(
+      pt(0, H + 36),
+      'Dashed red = remove.  Light grey = existing to remain.  Full weight = new work.',
+      'notes',
+      6
+    ));
   project.meta.notes = 'Confirm the wall being removed is non-load-bearing before demolition.';
   return project;
 }

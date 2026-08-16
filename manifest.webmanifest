@@ -1,0 +1,20 @@
+{
+  "name": "Storystick",
+  "short_name": "Storystick",
+  "description": "Draw it before you build it. Plans for buildings, renovations and woodworking projects.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0B1A2B",
+  "theme_color": "#0F2338",
+  "icons": [
+    { "src": "./brand/icon/app-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./brand/icon/app-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    {
+      "src": "./brand/icon/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

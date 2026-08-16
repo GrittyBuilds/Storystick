@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storystick — Brand Guide</title>
+<style>/*FONTS*/</style>
+<style>
+:root{
+  --blueprint:#0F2338; --ink:#0A1826; --canvas:#0B1A2B;
+  --blue:#1B5FA6; --sky:#3E86CE; --chalk:#A9C7E5;
+  --cedar:#D98235; --ember:#EFA860; --cedar-deep:#9E5813;
+  --vellum:#F7F4ED; --paper:#FFFFFF;
+  --graphite:#46525E; --slate:#65717C; --slate-40:#8A97A3; --mist:#E4E9EE;
+  --green:#1F9D6B; --green-deep:#177C54; --red:#D14343; --red-deep:#B93636;
+  --sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --brand:'Space Grotesk',var(--sans);
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  --maxw:1080px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--vellum);color:var(--graphite);
+  font-family:var(--sans);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 32px}
+h1,h2,h3,h4{font-family:var(--brand);color:var(--blueprint);font-weight:500;letter-spacing:-.015em;margin:0}
+h1{font-size:clamp(40px,7vw,68px);line-height:1.02;letter-spacing:-.03em}
+h2{font-size:clamp(26px,3.4vw,36px);line-height:1.15;margin-bottom:8px}
+h3{font-size:19px;line-height:1.3;margin-bottom:6px}
+h4{font-size:14px;text-transform:uppercase;letter-spacing:.11em;font-weight:700;color:var(--slate)}
+p{margin:0 0 16px}
+a{color:var(--blue)}
+.lede{font-size:19px;line-height:1.6;color:var(--graphite);max-width:62ch}
+.small{font-size:14px;line-height:1.55}
+.muted{color:var(--slate)}
+.mono{font-family:var(--mono);font-size:13px;letter-spacing:.01em}
+
+/* ---- structure ---- */
+section{padding:76px 0;border-top:1px solid var(--mist)}
+section:first-of-type{border-top:0}
+.sec-no{font-family:var(--mono);font-size:12px;color:var(--cedar-deep);letter-spacing:.16em;
+  text-transform:uppercase;margin-bottom:10px;display:block}
+.grid{display:grid;gap:24px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:820px){.g2,.g3,.g4{grid-template-columns:1fr}.wrap{padding:0 20px}}
+.card{background:var(--paper);border:1px solid var(--mist);border-radius:14px;padding:24px}
+.rule{height:1px;background:var(--mist);margin:36px 0}
+
+/* ---- cover ---- */
+.cover{background:var(--blueprint);color:var(--chalk);padding:0;border:0;position:relative;overflow:hidden}
+.cover::before{content:"";position:absolute;inset:0;
+  background-image:linear-gradient(var(--chalk) 1px,transparent 1px),linear-gradient(90deg,var(--chalk) 1px,transparent 1px);
+  background-size:48px 48px;opacity:.07}
+.cover .wrap{position:relative;padding-top:96px;padding-bottom:96px}
+.cover h1{color:var(--vellum)}
+.cover .lede{color:var(--chalk)}
+.cover-logo{width:300px;max-width:70%;margin-bottom:44px}
+.cover-logo svg{width:100%;height:auto;display:block}
+.meta-row{display:flex;flex-wrap:wrap;gap:36px;margin-top:52px;padding-top:28px;border-top:1px solid rgba(169,199,229,.24)}
+.meta-row div{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk);opacity:.8}
+.meta-row strong{display:block;font-family:var(--brand);font-size:15px;letter-spacing:0;text-transform:none;color:var(--vellum);font-weight:500;margin-top:5px;opacity:1}
+
+/* ---- toc ---- */
+.toc{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 28px;list-style:none;padding:0;margin:0}
+@media(max-width:820px){.toc{grid-template-columns:1fr}}
+.toc li{border-bottom:1px solid var(--mist)}
+.toc a{display:flex;gap:14px;padding:11px 0;text-decoration:none;color:var(--blueprint);font-size:15px}
+.toc a:hover{color:var(--blue)}
+.toc span{font-family:var(--mono);font-size:12px;color:var(--slate-40)}
+
+/* ---- logo blocks ---- */
+.logobox{background:var(--paper);border:1px solid var(--mist);border-radius:14px;
+  display:flex;align-items:center;justify-content:center;padding:40px;min-height:190px}
+.logobox.dark{background:var(--blueprint);border-color:var(--blueprint)}
+.logobox.vellum{background:var(--vellum)}
+.logobox.cedar{background:var(--cedar)}
+.logobox svg{max-width:100%;height:auto;display:block}
+.cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--slate);margin-top:10px}
+
+/* ---- swatches ---- */
+.sw{border-radius:12px;overflow:hidden;border:1px solid var(--mist);background:var(--paper)}
+.sw .chip{height:104px}
+.sw .info{padding:13px 15px}
+.sw .nm{font-family:var(--brand);font-weight:500;color:var(--blueprint);font-size:15px}
+.sw .hx{font-family:var(--mono);font-size:12px;color:var(--slate);margin-top:3px;text-transform:uppercase}
+.sw .use{font-size:12.5px;color:var(--slate);margin-top:7px;line-height:1.45}
+.ratio-bar{display:flex;height:52px;border-radius:10px;overflow:hidden;margin:18px 0 8px;border:1px solid var(--mist)}
+.ratio-bar div{display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px}
+
+/* ---- type ---- */
+.spec{display:flex;flex-wrap:wrap;gap:8px 20px;font-family:var(--mono);font-size:11.5px;
+  color:var(--slate);text-transform:uppercase;letter-spacing:.08em;margin-top:8px}
+.tsample{border-bottom:1px solid var(--mist);padding:20px 0}
+.tsample:last-child{border-bottom:0}
+.tsample .demo{color:var(--blueprint);font-family:var(--brand);font-weight:500;line-height:1.15}
+
+/* ---- do / dont ---- */
+.dd{border-radius:12px;overflow:hidden;border:1px solid var(--mist);background:var(--paper)}
+.dd .art{height:130px;display:flex;align-items:center;justify-content:center;background:var(--vellum);padding:18px}
+.dd .art svg{max-height:76px;width:auto}
+.dd .lbl{padding:11px 14px;font-size:13.5px;display:flex;gap:9px;align-items:flex-start;line-height:1.4}
+.dd .lbl b{font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding-top:2px}
+.no b{color:var(--red-deep)} .yes b{color:var(--green-deep)}
+
+/* ---- misc ---- */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--mist);vertical-align:top}
+th{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--slate);font-weight:400}
+td.mono{font-family:var(--mono);font-size:12.5px;color:var(--blueprint)}
+.pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:20px;
+  background:var(--mist);color:var(--graphite);letter-spacing:.06em}
+.pill.pass{background:#DFF1E9;color:var(--green-deep)}
+.pill.fail{background:#FBE4E4;color:var(--red-deep)}
+ul.tight{margin:0 0 16px;padding-left:20px}
+ul.tight li{margin-bottom:7px}
+blockquote{margin:0;padding:18px 22px;background:var(--paper);border-left:3px solid var(--cedar);
+  border-radius:0 10px 10px 0;font-family:var(--brand);font-size:18px;color:var(--blueprint);line-height:1.45}
+.voice{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--mist);border-radius:12px;overflow:hidden}
+@media(max-width:820px){.voice{grid-template-columns:1fr}}
+.voice > div{padding:18px 20px;background:var(--paper)}
+.voice .say{border-right:1px solid var(--mist)}
+.voice h4{margin-bottom:10px}
+.voice p{font-size:14.5px;margin-bottom:9px}
+.voice .say p{color:var(--blueprint)}
+.voice .dont p{color:var(--slate);text-decoration:line-through;text-decoration-color:var(--slate-40)}
+footer{background:var(--blueprint);color:var(--chalk);padding:52px 0;margin-top:0}
+footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:flex-end}
+footer .mono{color:var(--chalk);opacity:.7}
+footer .wrap>div:first-child{flex:0 0 260px}
+footer .wrap>div:first-child svg{width:100%;height:auto;display:block}
+.clearspace{position:relative;display:inline-block;padding:0}
+.icongrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:18px}
+.icongrid figure{margin:0;text-align:center}
+.icongrid img{width:100%;border-radius:22%;display:block;box-shadow:0 2px 10px rgba(15,35,56,.12)}
+.icongrid figcaption{font-family:var(--mono);font-size:11px;color:var(--slate);margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- ========== COVER ========== -->
+<section class="cover">
+  <div class="wrap">
+    <div class="cover-logo">{{svg:lockup-stacked-reverse-nobg}}</div>
+    <h1>Brand&nbsp;Guide</h1>
+    <p class="lede">Storystick is a drawing tool for people who build things — a bookcase, a kitchen, a barn, an addition. This document defines how it looks, sounds, and holds together.</p>
+    <div class="meta-row">
+      <div>Version<strong>1.0</strong></div>
+      <div>Issued<strong>August 2026</strong></div>
+      <div>Owner<strong>Rob Angevine</strong></div>
+      <div>Status<strong>Foundational</strong></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== TOC ========== -->
+<section>
+  <div class="wrap">
+    <h4 style="margin-bottom:18px">Contents</h4>
+    <ul class="toc">
+      <li><a href="#name"><span>01</span> The Name</a></li>
+      <li><a href="#position"><span>02</span> Positioning</a></li>
+      <li><a href="#audience"><span>03</span> Audience</a></li>
+      <li><a href="#logo"><span>04</span> Logo Suite</a></li>
+      <li><a href="#clearspace"><span>05</span> Clear Space &amp; Sizing</a></li>
+      <li><a href="#misuse"><span>06</span> Misuse</a></li>
+      <li><a href="#color"><span>07</span> Color</a></li>
+      <li><a href="#access"><span>08</span> Accessibility</a></li>
+      <li><a href="#type"><span>09</span> Typography</a></li>
+      <li><a href="#icon"><span>10</span> App Icon</a></li>
+      <li><a href="#draw"><span>11</span> Drawing Language</a></li>
+      <li><a href="#voice"><span>12</span> Voice &amp; Tone</a></li>
+      <li><a href="#msg"><span>13</span> Messaging</a></li>
+      <li><a href="#assets"><span>14</span> Asset Index</a></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 01 NAME ========== -->
+<section id="name">
+  <div class="wrap">
+    <span class="sec-no">01 — The Name</span>
+    <h2>Storystick</h2>
+    <div class="grid g2" style="margin-top:24px;align-items:start">
+      <div>
+        <p class="lede">A <strong>story stick</strong> is the oldest planning tool there is: a length of scrap marked with every critical dimension of a job. Instead of re-reading a tape forty times and making forty chances to be wrong, you mark it once and carry the stick.</p>
+        <p>Storystick is that idea as software. Capture a dimension once, and it carries through every drawing, every elevation, every cut list — unchanged, unrounded, unmistaken.</p>
+        <p>The name also carries a second reading that matters. In building, a <em>story</em> is a level of a structure. And in the ordinary sense, every project has one: what it was, what it's becoming, what it took.</p>
+      </div>
+      <div class="card">
+        <h4>The three readings</h4>
+        <table style="margin-top:12px">
+          <tr><td class="mono" style="width:34%">story stick</td><td>The marked layout stick. Precision carried, not remembered.</td></tr>
+          <tr><td class="mono">storey</td><td>A level of a building. The product spans furniture to floors.</td></tr>
+          <tr><td class="mono">story</td><td>What you're making, and why. The human half.</td></tr>
+        </table>
+        <p class="small muted" style="margin:16px 0 0">Written as one word, title case: <strong>Storystick</strong>. Never "Story Stick," "StoryStick," or "story-stick."</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 02 POSITIONING ========== -->
+<section id="position">
+  <div class="wrap">
+    <span class="sec-no">02 — Positioning</span>
+    <h2>What Storystick is</h2>
+    <blockquote style="margin:22px 0 30px;max-width:70ch">Storystick is a design and drafting tool for people who build things. Precise enough for a permit set, simple enough for a Saturday project.</blockquote>
+    <div class="grid g3">
+      <div class="card"><h3>The gap it fills</h3><p class="small" style="margin:0">Professional CAD is overbuilt and overpriced for a homeowner. Consumer room planners are toys the moment you need a real dimension. Storystick sits in the middle and scales in both directions.</p></div>
+      <div class="card"><h3>The core promise</h3><p class="small" style="margin:0">One model, many outputs. Draw it once and get the plan, the elevation, the section, the materials list, and the cut list — all in agreement, all the time.</p></div>
+      <div class="card"><h3>What it is not</h3><p class="small" style="margin:0">Not a rendering showroom. Not a BIM replacement. Not a project-management suite. Storystick draws and dimensions; it does not try to run your business.</p></div>
+    </div>
+    <div class="rule"></div>
+    <h4>Brand personality</h4>
+    <div class="grid g4" style="margin-top:16px">
+      <div><h3>Precise</h3><p class="small muted" style="margin:0">Every number is real. Nothing is "about."</p></div>
+      <div><h3>Plainspoken</h3><p class="small muted" style="margin:0">Shop language over software language.</p></div>
+      <div><h3>Unintimidating</h3><p class="small muted" style="margin:0">Expertise is welcome. It is never required.</p></div>
+      <div><h3>Made-by-hand</h3><p class="small muted" style="margin:0">Digital tool, physical outcome. Never forget the sawdust.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 03 AUDIENCE ========== -->
+<section id="audience">
+  <div class="wrap">
+    <span class="sec-no">03 — Audience</span>
+    <h2>Four users, one tool</h2>
+    <p class="lede">The brand must read as credible to a licensed architect and as approachable to someone building their first bookshelf. That tension is the whole design problem — and the reason the system pairs drafting blue with a warm, human accent.</p>
+    <table style="margin-top:26px">
+      <tr><th style="width:22%">User</th><th style="width:30%">Comes for</th><th>What the brand must signal</th></tr>
+      <tr><td><strong>DIY &amp; hobbyist woodworkers</strong></td><td>Furniture, shop projects, jigs, cut lists</td><td>You will not be lost here. The tool speaks your language — kerf, rip, dado — not "parametric assembly."</td></tr>
+      <tr><td><strong>Homeowners renovating</strong></td><td>Kitchens, baths, additions, contractor conversations</td><td>You can produce something a professional will take seriously.</td></tr>
+      <tr><td><strong>Contractors &amp; remodelers</strong></td><td>Field-ready drawings, quick as-builts, client sign-off</td><td>Fast, durable, readable on a phone in daylight. No fuss.</td></tr>
+      <tr><td><strong>Architects &amp; designers</strong></td><td>Early schematic work, small residential, quick studies</td><td>The dimensions are trustworthy and the output is clean enough to hand over.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 04 LOGO ========== -->
+<section id="logo">
+  <div class="wrap">
+    <span class="sec-no">04 — Logo Suite</span>
+    <h2>The mark</h2>
+    <div class="grid g2" style="margin-top:24px;align-items:center">
+      <div class="logobox" style="min-height:280px">{{svg:mark-nobg}}</div>
+      <div>
+        <p>The mark is a <strong>story pole standing on a floor line</strong>. Three notches are cut into the pole — the marks you carry. One of them is transferred out to the right in cedar: the moment a measurement leaves the stick and becomes something you build to.</p>
+        <p>The notches are <em>knocked out</em>, not painted. The mark is a single-color shape plus one accent line, so it sits correctly on any background without a second version.</p>
+        <p class="small muted" style="margin-bottom:0">Geometry is built on a 120&nbsp;×&nbsp;120 grid with an 8-unit base module. Corner radii, stroke weights, and the notch depth are all multiples of it.</p>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+    <h4>Primary lockups</h4>
+    <div class="grid g2" style="margin-top:18px">
+      <div><div class="logobox">{{svg:lockup-horizontal-nobg}}</div><div class="cap">Horizontal — default</div></div>
+      <div><div class="logobox">{{svg:lockup-stacked-nobg}}</div><div class="cap">Stacked — square spaces, avatars</div></div>
+      <div><div class="logobox">{{svg:lockup-horizontal-tagline-nobg}}</div><div class="cap">Horizontal + tagline — first impressions</div></div>
+      <div><div class="logobox">{{svg:wordmark-nobg}}</div><div class="cap">Wordmark alone — when the mark already appears nearby</div></div>
+    </div>
+
+    <div class="rule"></div>
+    <h4>Color variants</h4>
+    <div class="grid g3" style="margin-top:18px">
+      <div><div class="logobox dark">{{svg:lockup-horizontal-reverse-nobg}}</div><div class="cap">Reverse on Blueprint</div></div>
+      <div><div class="logobox">{{svg:lockup-horizontal-twotone-nobg}}</div><div class="cap">Two-tone — marketing only</div></div>
+      <div><div class="logobox">{{svg:lockup-horizontal-mono-black-nobg}}</div><div class="cap">One-color black — fax, engraving, single-plate print</div></div>
+    </div>
+    <p class="small muted" style="margin-top:16px">The two-tone wordmark (Blueprint + Cedar) clarifies the compound word and is useful in campaign settings. It is <strong>not</strong> the default: product UI, documents, and partner marks use the single-color wordmark.</p>
+  </div>
+</section>
+
+<!-- ========== 05 CLEAR SPACE ========== -->
+<section id="clearspace">
+  <div class="wrap">
+    <span class="sec-no">05 — Clear Space &amp; Sizing</span>
+    <h2>Give it room</h2>
+    <div class="grid g2" style="margin-top:24px;align-items:start">
+      <div>
+        <div class="logobox" style="min-height:250px;background:var(--paper);position:relative">
+          <svg viewBox="0 0 420 190" style="width:100%">
+            <defs><pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="7" stroke="#A9C7E5" stroke-width="2.5" opacity=".45"/></pattern></defs>
+            <rect x="6" y="6" width="408" height="178" fill="url(#hatch)"/>
+            <rect x="40" y="40" width="340" height="110" fill="#FFFFFF"/>
+            <rect x="40" y="40" width="340" height="110" fill="none" stroke="#1B5FA6" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <g transform="translate(58,52) scale(0.72)">{{raw:lockup-horizontal-inner}}</g>
+            <g stroke="#D98235" stroke-width="1.5">
+              <line x1="6" y1="24" x2="40" y2="24"/><line x1="6" y1="18" x2="6" y2="30"/><line x1="40" y1="18" x2="40" y2="30"/>
+            </g>
+            <text x="12" y="16" font-family="IBM Plex Mono" font-size="10" fill="#9E5813">X</text>
+          </svg>
+        </div>
+        <div class="cap">Minimum clear space = X, the width of the pole in the mark</div>
+      </div>
+      <div>
+        <h3>Clear space</h3>
+        <p>Define <strong>X</strong> as the width of the pole in the mark (34 units on the 120-unit grid — roughly 28% of the mark's height). Keep at least X of empty space on every side of any lockup. Nothing crosses it: no type, no rules, no photo edges, no other logos.</p>
+        <h3 style="margin-top:26px">Minimum sizes</h3>
+        <table>
+          <tr><th>Asset</th><th>Screen</th><th>Print</th></tr>
+          <tr><td>Mark alone</td><td class="mono">16 px tall</td><td class="mono">5 mm</td></tr>
+          <tr><td>Horizontal lockup</td><td class="mono">104 px wide</td><td class="mono">26 mm</td></tr>
+          <tr><td>Stacked lockup</td><td class="mono">72 px wide</td><td class="mono">20 mm</td></tr>
+          <tr><td>Horizontal + tagline</td><td class="mono">180 px wide</td><td class="mono">44 mm</td></tr>
+        </table>
+        <p class="small muted" style="margin-top:14px">Below 20&nbsp;px, use <span class="mono">favicon-mark</span> — a two-notch simplification drawn so the notches survive rasterization.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 06 MISUSE ========== -->
+<section id="misuse">
+  <div class="wrap">
+    <span class="sec-no">06 — Misuse</span>
+    <h2>What not to do</h2>
+    <p class="lede">The mark is simple, which makes it easy to break. These are the failures that actually happen.</p>
+    <div class="grid g4" style="margin-top:26px">{{MISUSE}}</div>
+  </div>
+</section>
+
+<!-- ========== 07 COLOR ========== -->
+<section id="color">
+  <div class="wrap">
+    <span class="sec-no">07 — Color</span>
+    <h2>Blueprint and cedar</h2>
+    <p class="lede">Two halves of one idea. The blues come from drafting — cyanotype paper, chalk lines, the cool light of a screen at 11pm. Cedar comes from the material side: sawdust, warm wood, a pencil behind the ear. Everything else is structure.</p>
+
+    <h4 style="margin-top:40px">Core</h4>
+    <div class="grid g4" style="margin-top:14px">{{SW_CORE}}</div>
+
+    <h4 style="margin-top:40px">Support</h4>
+    <div class="grid g4" style="margin-top:14px">{{SW_SUPPORT}}</div>
+
+    <h4 style="margin-top:40px">Functional</h4>
+    <div class="grid g4" style="margin-top:14px">{{SW_FUNC}}</div>
+
+    <div class="rule"></div>
+    <h4>Balance</h4>
+    <p class="small" style="max-width:64ch">Cedar is a spice, not a base. If a layout looks orange, it is wrong. The target mix for any full page or screen:</p>
+    <div class="ratio-bar">
+      <div style="flex:60;background:var(--vellum);color:var(--graphite)">60% Vellum / Blueprint</div>
+      <div style="flex:25;background:var(--blue);color:#fff">25% Drafting Blue</div>
+      <div style="flex:10;background:var(--mist);color:var(--graphite)">10% Neutral</div>
+      <div style="flex:5;background:var(--cedar);color:#fff">5%</div>
+    </div>
+    <p class="small muted">Cedar earns its 5% on: the accent line in the mark, the active/selected state, one key call to action per screen, and dimension callouts the user just created.</p>
+  </div>
+</section>
+
+<!-- ========== 08 ACCESSIBILITY ========== -->
+<section id="access">
+  <div class="wrap">
+    <span class="sec-no">08 — Accessibility</span>
+    <h2>Contrast rules</h2>
+    <p class="lede">Measured against WCAG 2.1. Normal text needs 4.5:1; large text (18.66&nbsp;px bold or 24&nbsp;px regular) and UI boundaries need 3:1.</p>
+    <table style="margin-top:26px">
+      <tr><th>Foreground</th><th>Background</th><th>Ratio</th><th>Normal text</th><th>Large / UI</th></tr>
+      {{CONTRAST}}
+    </table>
+    <div class="grid g2" style="margin-top:30px">
+      <div class="card" style="border-left:3px solid var(--red)">
+        <h3>Cedar is not a text color on light</h3>
+        <p class="small" style="margin:0">Cedar <span class="mono">#D98235</span> hits only 2.66:1 on Vellum. Use it for shapes, fills, lines, and icons — never for body copy on a light background. When cedar must carry text on light, use <strong>Cedar Deep</strong> <span class="mono">#9E5813</span> (4.95:1).</p>
+      </div>
+      <div class="card" style="border-left:3px solid var(--green)">
+        <h3>On dark, cedar is fine</h3>
+        <p class="small" style="margin:0">Cedar on Blueprint reaches 5.46:1 and passes for normal text. This is why the dark canvas is the natural home for cedar highlights — selection, active dimension, snap callouts.</p>
+      </div>
+    </div>
+    <p class="small muted" style="margin-top:22px">Color is never the only signal. Snap states, errors, and validity always pair color with a shape, icon, or label change — a meaningful share of the woodworking and construction audience has some form of color vision deficiency, and job-site screens are read in direct sun.</p>
+  </div>
+</section>
+
+<!-- ========== 09 TYPE ========== -->
+<section id="type">
+  <div class="wrap">
+    <span class="sec-no">09 — Typography</span>
+    <h2>Three faces, three jobs</h2>
+    <div class="grid g3" style="margin-top:26px">
+      <div class="card"><h4>Brand &amp; Headlines</h4><div style="font-family:var(--brand);font-size:46px;color:var(--blueprint);line-height:1;margin:14px 0 6px">Aa</div><h3>Space Grotesk</h3><p class="small muted" style="margin:0">Medium 500 / Bold 700. Geometric with just enough oddness to feel drawn rather than generated. The wordmark is Medium.</p><p class="mono muted" style="margin:12px 0 0;font-size:11px">SIL OPEN FONT LICENSE 1.1</p></div>
+      <div class="card"><h4>Interface &amp; Body</h4><div style="font-family:var(--sans);font-size:46px;color:var(--blueprint);line-height:1;margin:14px 0 6px">Aa</div><h3>Inter</h3><p class="small muted" style="margin:0">Regular 400 → Bold 700. Neutral, tested at small sizes, excellent at 12–14&nbsp;px where most of the app lives.</p><p class="mono muted" style="margin:12px 0 0;font-size:11px">SIL OPEN FONT LICENSE 1.1</p></div>
+      <div class="card"><h4>Dimensions &amp; Data</h4><div style="font-family:var(--mono);font-size:46px;color:var(--blueprint);line-height:1;margin:14px 0 6px">Aa</div><h3>IBM Plex Mono</h3><p class="small muted" style="margin:0">Regular 400 / Medium 500. Every measurement, coordinate, cut-list entry, and part number. Fixed width means columns of numbers line up and a mis-keyed digit is visible.</p><p class="mono muted" style="margin:12px 0 0;font-size:11px">SIL OPEN FONT LICENSE 1.1</p></div>
+    </div>
+
+    <div class="rule"></div>
+    <h4>The rule that matters</h4>
+    <blockquote style="margin:16px 0 30px;max-width:68ch">If a number must be read exactly, it is set in IBM Plex Mono. If it is prose, it is Inter. No exceptions — this is the single typographic habit that makes Storystick feel like an instrument.</blockquote>
+    <div class="card" style="background:var(--blueprint);border-color:var(--blueprint)">
+      <div style="font-family:var(--mono);font-size:14px;color:var(--chalk);line-height:2">
+        <div style="color:var(--cedar-lt,#EFA860)">CUT LIST — SHELF UNIT / WALNUT</div>
+        <div>2 &nbsp;SIDE &nbsp;&nbsp;&nbsp; 72" &nbsp;× 11-1/4" × 3/4"</div>
+        <div>4 &nbsp;SHELF &nbsp;&nbsp; 33-1/2" × 11" &nbsp;&nbsp;&nbsp;× 3/4"</div>
+        <div>1 &nbsp;BACK &nbsp;&nbsp;&nbsp; 71-1/4" × 34" &nbsp;&nbsp;&nbsp;× 1/4"</div>
+        <div style="color:#8A97A3">— 3 board-feet waste at 1/8" kerf</div>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+    <h4>Type scale</h4>
+    <div style="margin-top:14px">{{TYPESCALE}}</div>
+  </div>
+</section>
+
+<!-- ========== 10 APP ICON ========== -->
+<section id="icon">
+  <div class="wrap">
+    <span class="sec-no">10 — App Icon</span>
+    <h2>On a home screen</h2>
+    <p class="lede">Blueprint navy field, a whisper of grid at 9% chalk, the mark at 60% of the tile. The grid is the difference between an icon and a logo in a box — at a glance it reads as drafting paper.</p>
+    <div class="icongrid" style="margin-top:30px">{{ICONS}}</div>
+    <p class="small muted" style="margin-top:22px">Ship the <span class="mono">maskable</span> variant to Android and PWA manifests: it is full-bleed with the mark held inside the 80% safe circle, so aggressive platform masks never clip the pole. Below 24&nbsp;px the three-notch mark collapses — the favicon build drops to two deeper notches.</p>
+  </div>
+</section>
+
+<!-- ========== 11 DRAWING LANGUAGE ========== -->
+<section id="draw">
+  <div class="wrap">
+    <span class="sec-no">11 — Drawing Language</span>
+    <h2>How the canvas looks</h2>
+    <p class="lede">The drawing surface is the product. Its conventions are part of the brand, not an afterthought of engineering.</p>
+    <div class="grid g2" style="margin-top:28px;align-items:start">
+      <div>
+        <div style="border-radius:14px;overflow:hidden;border:1px solid var(--mist)">{{CANVAS_DEMO}}</div>
+        <div class="cap">Blueprint mode — the default working canvas</div>
+      </div>
+      <div>
+        <table>
+          <tr><th>Element</th><th>Treatment</th></tr>
+          <tr><td>Canvas</td><td class="mono">#0B1A2B</td></tr>
+          <tr><td>Minor grid</td><td class="mono">Chalk @ 6% · 1 px</td></tr>
+          <tr><td>Major grid</td><td class="mono">Chalk @ 12% · 1 px · every 5</td></tr>
+          <tr><td>Geometry</td><td class="mono">Chalk · 1.5 px</td></tr>
+          <tr><td>Selected</td><td class="mono">Cedar · 2 px</td></tr>
+          <tr><td>Dimension line</td><td class="mono">Sky · 1 px · 3-2 dash</td></tr>
+          <tr><td>Dimension text</td><td class="mono">Plex Mono 11 · Chalk</td></tr>
+          <tr><td>Snap indicator</td><td class="mono">Level Green · 6 px square</td></tr>
+          <tr><td>Out of tolerance</td><td class="mono">Plumb Red · 2 px + icon</td></tr>
+        </table>
+        <p class="small muted">A light <strong>Paper mode</strong> mirrors this on Vellum with Blueprint geometry, for printing and for outdoor screens. Both modes ship; neither is an afterthought.</p>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <h4>Line weight hierarchy</h4>
+    <p class="small" style="max-width:66ch">Storystick follows drafting convention rather than inventing one. Users who know it will feel at home; users who don't will absorb it without being taught.</p>
+    <table style="margin-top:8px">
+      <tr><th>Weight</th><th>Used for</th></tr>
+      <tr><td class="mono">0.70 mm</td><td>Section cuts, walls in plan — anything the cutting plane passes through</td></tr>
+      <tr><td class="mono">0.50 mm</td><td>Object outlines in elevation, visible edges</td></tr>
+      <tr><td class="mono">0.35 mm</td><td>Surface lines, joinery, material changes</td></tr>
+      <tr><td class="mono">0.25 mm</td><td>Dimensions, leaders, hatching, centerlines</td></tr>
+      <tr><td class="mono">0.18 mm</td><td>Grid, construction geometry, hidden lines</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ========== 12 VOICE ========== -->
+<section id="voice">
+  <div class="wrap">
+    <span class="sec-no">12 — Voice &amp; Tone</span>
+    <h2>How Storystick talks</h2>
+    <p class="lede">Like a good shop teacher: knows more than you, never makes you feel it, tells you the number.</p>
+    <div class="grid g2" style="margin-top:28px">
+      <div class="card"><h3>Use the trade's words</h3><p class="small" style="margin:0">Kerf, rip, dado, stud bay, on-center, header, rise and run. Not "parametric assembly," "entity," or "workspace object." If a carpenter wouldn't say it on site, don't put it in the UI.</p></div>
+      <div class="card"><h3>State the number</h3><p class="small" style="margin:0">Never "approximately" when the value is known. "33-1/2 in." beats "about 33 and a half inches." Vagueness is the one thing this tool exists to eliminate.</p></div>
+      <div class="card"><h3>Second person, active, present</h3><p class="small" style="margin:0">"Draw a wall, then set its height." Not "Walls may be created and subsequently modified."</p></div>
+      <div class="card"><h3>Errors name the fix</h3><p class="small" style="margin:0">"This wall is 1/4 in. short of the corner — snap it?" Not "Invalid geometry." Every error message ends with something the user can press.</p></div>
+    </div>
+    <h4 style="margin:36px 0 12px">Say this, not that</h4>
+    <div class="voice">
+      <div class="say"><h4 style="color:var(--green-deep)">Say</h4>
+        <p>Draw it before you build it.</p>
+        <p>Your cut list updates as you draw.</p>
+        <p>That stud bay is 14-1/2 in. Want to snap it to 16 on-center?</p>
+        <p>Works in feet-and-inches or millimeters. Switch anytime.</p>
+        <p>Start with a wall.</p></div>
+      <div class="dont"><h4 style="color:var(--red-deep)">Not</h4>
+        <p>Unleash your design potential.</p>
+        <p>Automatically generate a bill of materials.</p>
+        <p>Invalid geometry detected.</p>
+        <p>Full support for multiple unit systems and conversion workflows.</p>
+        <p>Get started by creating your first project workspace.</p></div>
+    </div>
+    <h4 style="margin:36px 0 12px">Things we never say</h4>
+    <ul class="tight small" style="max-width:66ch">
+      <li><strong>"Easy."</strong> Building is not easy. Drawing it can be clearer, faster, and more certain — say that instead.</li>
+      <li><strong>"Just."</strong> As in "just drag the wall." It quietly blames the user when it doesn't work.</li>
+      <li><strong>"Pro" as a slur or a gate.</strong> The hobbyist is not a lesser user, and the architect is not a different species.</li>
+      <li><strong>Anything implying the drawing is a substitute for a licensed professional</strong> where one is legally required. Storystick produces drawings; it does not stamp them.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 13 MESSAGING ========== -->
+<section id="msg">
+  <div class="wrap">
+    <span class="sec-no">13 — Messaging</span>
+    <h2>Taglines &amp; boilerplate</h2>
+    <div class="grid g2" style="margin-top:24px;align-items:start">
+      <div>
+        <h4>Primary tagline</h4>
+        <blockquote style="margin:12px 0 26px">Draw it before you build it.</blockquote>
+        <h4>Alternates</h4>
+        <table style="margin-top:10px">
+          <tr><td>Every build starts on the stick.</td><td class="small muted" style="width:42%">Brand-led, for people who know the name's origin</td></tr>
+          <tr><td>From sketch to cut list.</td><td class="small muted">Feature-led, woodworking channels</td></tr>
+          <tr><td>Plans for anything you make.</td><td class="small muted">Broadest, app-store subtitle</td></tr>
+          <tr><td>Measure once. Draw it right.</td><td class="small muted">Trade press, contractor channels</td></tr>
+        </table>
+      </div>
+      <div>
+        <h4>One-liner</h4>
+        <p class="small">Storystick turns a rough idea into a real, dimensioned plan — for a bookshelf or a whole addition.</p>
+        <h4 style="margin-top:24px">Short boilerplate — 50 words</h4>
+        <p class="small">Storystick is a design tool for people who build things. Draw a plan, an elevation, or a piece of furniture, and get accurate dimensions, materials, and cut lists that stay in agreement as you change your mind. Precise enough for a permit set, simple enough for a Saturday project.</p>
+        <h4 style="margin-top:24px">App-store subtitle — 30 char</h4>
+        <p class="mono small" style="color:var(--blueprint)">Plans for anything you build</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== 14 ASSETS ========== -->
+<section id="assets">
+  <div class="wrap">
+    <span class="sec-no">14 — Asset Index</span>
+    <h2>What's in the package</h2>
+    <table style="margin-top:24px">
+      <tr><th style="width:30%">Path</th><th>Contents</th></tr>
+      <tr><td class="mono">logo/svg/</td><td>20 vector files — mark, wordmark, and every lockup in default, reverse, two-tone, and one-color black/white</td></tr>
+      <tr><td class="mono">logo/png/</td><td>Same set rasterized at 1× and 2×, transparent where applicable</td></tr>
+      <tr><td class="mono">icon/</td><td>App icon in dark, light, blue, and maskable builds — SVG plus PNG at 1024 / 512 / 256 / 192 / 180 / 120 / 96 / 64, and a two-notch favicon at 64 / 48 / 32 / 16</td></tr>
+      <tr><td class="mono">brand/</td><td>This guide, as HTML and PDF</td></tr>
+      <tr><td class="mono">ui/</td><td>Interface kit — tokens, components, both canvas modes, light and dark</td></tr>
+      <tr><td class="mono">gtm/</td><td>Landing page, app-store screenshot frames, social avatars and banners, OG image</td></tr>
+      <tr><td class="mono">fonts/</td><td>Space Grotesk, Inter, IBM Plex Mono — all SIL OFL 1.1, free for commercial use and embedding</td></tr>
+      <tr><td class="mono">tokens.json / tokens.css</td><td>Machine-readable color and type tokens for the build</td></tr>
+    </table>
+    <div class="card" style="margin-top:30px;border-left:3px solid var(--cedar)">
+      <h3>Before you launch</h3>
+      <ul class="tight small" style="margin-bottom:0">
+        <li>Run a US federal trademark search (USPTO TESS) in Class 9 and Class 42 for "Storystick" and near neighbors before you spend on print or file an application. This guide's name screening covered live products and domains, not registry records.</li>
+        <li>Secure <span class="mono">storystick.app</span>, <span class="mono">storystick.com</span>, and the matching handles on the channels your audience actually uses — YouTube and Instagram carry disproportionate weight in woodworking.</li>
+        <li>All three typefaces are SIL OFL 1.1: free to use, embed, and ship inside an application. Keep the license files with the fonts if you redistribute them.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div style="max-width:280px">{{svg:lockup-horizontal-reverse-nobg}}</div>
+    <div class="mono small">Brand Guide v1.0 · August 2026<br>Draw it before you build it.</div>
+  </div>
+</footer>
+
+</body>
+</html>

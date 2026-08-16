@@ -9,6 +9,9 @@ import { pageToSvg, cutListCsv, scheduleCsv, estimateCsv } from '../features/exp
 import { listProjects, deleteProject, serializeProject } from '../core/store.js';
 import { formatLength, formatArea, parseLength } from '../core/units.js';
 import { PAGE_KINDS } from '../core/document.js';
+import { TOKEN } from '../render/theme.js';
+
+export const TAGLINE = 'Draw it before you build it.';
 
 let host = null;
 let onCloseHook = null;
@@ -101,7 +104,7 @@ export function templateGallery(app) {
   );
   openModal({
     title: 'Start a new project',
-    subtitle: 'Pick a starting point — everything stays editable.',
+    subtitle: `${TAGLINE} Pick a starting point — everything stays editable.`,
     body,
     wide: true,
   });
@@ -136,7 +139,7 @@ export function openProjectDialog(app) {
       }),
     ]);
     return entries.length
-      ? table(['Project', 'Type', 'Sheets', 'Last saved', ''], rows)
+      ? table(['Project', 'Type', 'Sheets', 'Last saved', ''], rows, { mono: [2, 3] })
       : el('p', { class: 'muted', text: 'No saved projects in this browser yet.' });
   };
 
@@ -166,7 +169,7 @@ export function openProjectDialog(app) {
 export function settingsDialog(app) {
   const p = app.project;
   const lengthField = (label, value, onCommit, hint) => {
-    const input = el('input', { type: 'text', value: formatLength(value, p.unitSystem) });
+    const input = el('input', { type: 'text', class: 'dim', value: formatLength(value, p.unitSystem) });
     const commit = () => {
       const parsed = parseLength(input.value, p.unitSystem);
       if (parsed !== null && parsed > 0) {
@@ -251,6 +254,13 @@ export function settingsDialog(app) {
 // --- cut list -------------------------------------------------------------
 
 const LAYOUT_WIDTH = 400;
+const SANS = "'Inter', Helvetica, sans-serif";
+const MONO = "'IBM Plex Mono', ui-monospace, monospace";
+const PIECE_FILL = 'rgba(27,95,166,0.13)';
+
+// Part names are user text and these layouts are injected as markup.
+const esc = (v) =>
+  String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 function sheetSvg(sheet, material, app) {
   const scale = LAYOUT_WIDTH / material.stockL;
@@ -262,17 +272,21 @@ function sheetSvg(sheet, material, app) {
       const y = p.y * scale;
       const pw = p.l * scale;
       const ph = p.w * scale;
-      const label = pw > 46 && ph > 16 ? `<text x="${x + pw / 2}" y="${y + ph / 2 + 3}" font-size="9" text-anchor="middle" fill="#3b2f6b">${p.name}</text>` : '';
+      const label =
+        pw > 46 && ph > 16
+          ? `<text x="${x + pw / 2}" y="${y + ph / 2 + 3}" font-size="9" font-family="${SANS}" font-weight="500" text-anchor="middle" fill="${TOKEN.blueprint}">${esc(p.name)}</text>`
+          : '';
       const size =
         pw > 60 && ph > 28
-          ? `<text x="${x + pw / 2}" y="${y + ph / 2 + 14}" font-size="8" text-anchor="middle" fill="#6b5fa8">${app
-              .fmtShort(p.l)} × ${app.fmtShort(p.w)}</text>`
+          ? `<text x="${x + pw / 2}" y="${y + ph / 2 + 15}" font-size="8" font-family="${MONO}" text-anchor="middle" fill="${TOKEN.slate}">${app.fmtShort(
+              p.l
+            )} × ${app.fmtShort(p.w)}</text>`
           : '';
-      return `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" fill="rgba(124,58,237,0.16)" stroke="#7c3aed" stroke-width="1"/>${label}${size}`;
+      return `<rect x="${x}" y="${y}" width="${pw}" height="${ph}" fill="${PIECE_FILL}" stroke="${TOKEN.blue}" stroke-width="1"/>${label}${size}`;
     })
     .join('');
   return `<svg class="layout" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet">
-    <rect x="0" y="0" width="${w}" height="${h}" fill="#fbfaf7" stroke="#1f2933" stroke-width="1.5"/>${pieces}</svg>`;
+    <rect x="0" y="0" width="${w}" height="${h}" fill="${TOKEN.vellum}" stroke="${TOKEN.blueprint}" stroke-width="1.5"/>${pieces}</svg>`;
 }
 
 function laneSvg(run, material, app) {
@@ -285,16 +299,31 @@ function laneSvg(run, material, app) {
         .map((p) => {
           const x = p.start * scale;
           const width = p.length * scale;
-          const label = width > 40 ? `<text x="${x + width / 2}" y="${y + 14}" font-size="9" text-anchor="middle" fill="#3b2f6b">${p.name} ${app.fmtShort(p.length)}</text>` : '';
-          return `<rect x="${x}" y="${y}" width="${width}" height="${laneHeight}" fill="rgba(124,58,237,0.16)" stroke="#7c3aed" stroke-width="1"/>${label}`;
+          const label =
+            width > 40
+              ? `<text x="${x + width / 2}" y="${y + 14}" font-size="9" font-family="${MONO}" text-anchor="middle" fill="${TOKEN.blueprint}">${esc(p.name)} ${app.fmtShort(
+                  p.length
+                )}</text>`
+              : '';
+          return `<rect x="${x}" y="${y}" width="${width}" height="${laneHeight}" fill="${PIECE_FILL}" stroke="${TOKEN.blue}" stroke-width="1"/>${label}`;
         })
         .join('');
-      return `<rect x="0" y="${y}" width="${material.stockL * scale}" height="${laneHeight}" fill="#fbfaf7" stroke="#1f2933" stroke-width="1"/>${segs}`;
+      return `<rect x="0" y="${y}" width="${material.stockL * scale}" height="${laneHeight}" fill="${
+        TOKEN.vellum
+      }" stroke="${TOKEN.blueprint}" stroke-width="1"/>${segs}`;
     })
     .join('');
   const height = Math.max(laneHeight, run.lanes.length * (laneHeight + 4));
   const width = material.stockL * scale;
   return `<svg class="layout" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet">${rows}</svg>`;
+}
+
+/** Brand alert: a title, then the fix the user can act on. */
+function alertBox(kind, title, body) {
+  return el('div', { class: `alert ${kind}` }, [
+    el('span', { class: 'ic', text: kind === 'warn' ? '!' : 'i' }),
+    el('div', {}, [el('b', { text: title }), body]),
+  ]);
 }
 
 export function cutListDialog(app) {
@@ -304,10 +333,13 @@ export function cutListDialog(app) {
 
   if (!list.groups.length) {
     sections.push(
-      el('p', {
-        class: 'muted',
-        text: 'No parts yet. Use the Part tool (K) to draw rectangles for each piece of your project — they flow straight into this cut list.',
-      })
+      alertBox(
+        'info',
+        'No parts on this project yet',
+        el('span', {
+          text: 'Draw a rectangle with the Part tool (K) for each piece you need to cut. Give it a material and a quantity in Properties and it lands here, packed onto real stock.',
+        })
+      )
     );
   }
 
@@ -360,12 +392,22 @@ export function cutListDialog(app) {
             )} · ${(group.utilization * 100).toFixed(0)}% yield`,
           }),
         ]),
-        table(['Part', 'Qty', 'Length', 'Width', 'Thick', 'Bd ft', 'Notes'], rows, { compact: true }),
+        table(['Part', 'Qty', 'Length', 'Width', 'Thick', 'Bd ft', 'Notes'], rows, {
+          compact: true,
+          mono: [1, 2, 3, 4, 5],
+        }),
         group.oversize && group.oversize.length
-          ? el('p', {
-              class: 'warn',
-              text: `${group.oversize.length} part(s) do not fit the stock size for this material.`,
-            })
+          ? alertBox(
+              'warn',
+              `${group.oversize.length} part${group.oversize.length === 1 ? '' : 's'} won't fit ${
+                group.material.name
+              }`,
+              el('span', {
+                text: `Stock is ${app.fmtShort(group.material.stockL)} × ${app.fmtShort(
+                  group.material.stockW
+                )}. Break the part into smaller pieces, or raise the stock size for this material in Settings.`,
+              })
+            )
           : null,
         layouts,
       ])
@@ -378,7 +420,8 @@ export function cutListDialog(app) {
         el('h3', { text: 'Parts with an unknown material' }),
         table(
           ['Part', 'Qty', 'Length', 'Width'],
-          list.unassigned.map((r) => [r.name, String(r.qty), app.fmtShort(r.length), app.fmtShort(r.width)])
+          list.unassigned.map((r) => [r.name, String(r.qty), app.fmtShort(r.length), app.fmtShort(r.width)]),
+          { mono: [1, 2, 3] }
         ),
       ])
     );
@@ -426,7 +469,8 @@ export function scheduleDialog(app) {
       s.rooms.length
         ? table(
             ['Room', 'Sheet', 'Area', 'Perimeter'],
-            s.rooms.map((r) => [r.name, r.page, formatArea(r.area, sys), formatLength(r.perimeter, sys)])
+            s.rooms.map((r) => [r.name, r.page, formatArea(r.area, sys), formatLength(r.perimeter, sys)]),
+            { mono: [2, 3] }
           )
         : el('p', { class: 'muted', text: 'No rooms defined. Use the Room tool (R).' }),
     ]),
@@ -441,7 +485,8 @@ export function scheduleDialog(app) {
               app.fmtShort(d.height),
               d.swing,
               app.fmtShort(d.wallThickness),
-            ])
+            ]),
+            { mono: [0, 1, 2, 4] }
           )
         : el('p', { class: 'muted', text: 'No doors placed.' }),
     ]),
@@ -456,7 +501,8 @@ export function scheduleDialog(app) {
               app.fmtShort(w.height),
               app.fmtShort(w.sill),
               app.fmtShort(w.wallThickness),
-            ])
+            ]),
+            { mono: [0, 1, 2, 3, 4] }
           )
         : el('p', { class: 'muted', text: 'No windows placed.' }),
     ]),
@@ -472,7 +518,8 @@ export function scheduleDialog(app) {
               formatArea(w.grossArea, sys),
               formatArea(w.netArea, sys),
               String(w.openings),
-            ])
+            ]),
+            { mono: [1, 2, 3, 4, 5] }
           )
         : el('p', { class: 'muted', text: 'No walls drawn.' }),
     ]),
@@ -510,7 +557,8 @@ export function estimateDialog(app) {
         el('h3', { text: section.title }),
         table(
           ['Item', 'Qty', 'Unit', 'Unit cost', 'Total', 'Note'],
-          section.items.map((i) => [i.label, String(i.qty), i.unit, money(i.unitCost), money(i.total), i.note])
+          section.items.map((i) => [i.label, String(i.qty), i.unit, money(i.unitCost), money(i.total), i.note]),
+          { mono: [1, 3, 4] }
         ),
       ])
     ),

@@ -107,6 +107,29 @@ export function lastOpened() {
   }
 }
 
+const MODE_KEY = 'storystick.canvasMode';
+
+/** Canvas mode is a viewing preference, not a document property. */
+export function loadCanvasMode() {
+  const s = storage();
+  if (!s) return 'blueprint';
+  try {
+    return s.getItem(MODE_KEY) === 'paper' ? 'paper' : 'blueprint';
+  } catch {
+    return 'blueprint';
+  }
+}
+
+export function saveCanvasMode(mode) {
+  const s = storage();
+  if (!s) return;
+  try {
+    s.setItem(MODE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function serializeProject(project) {
   return JSON.stringify(project, null, 2);
 }

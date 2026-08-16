@@ -3,11 +3,21 @@
 import { el, clear, field, select, numberInput, textInput } from './dom.js';
 import { formatLength, formatArea, parseLength } from '../core/units.js';
 import { WALL_STATUS, describe, wallLength, findEntity } from '../core/entities.js';
+import { layerColor } from '../render/theme.js';
 import * as g from '../core/geometry.js';
+
+const ICONS = {
+  eye: '<svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+  eyeOff:
+    '<svg viewBox="0 0 24 24"><path d="M4 5l16 14M10.6 6.2A9.6 9.6 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.3 4M6.5 8.4A17 17 0 0 0 2 12s4 7 10 7a9.7 9.7 0 0 0 3.6-.7"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  unlock:
+    '<svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.5-1.8"/></svg>',
+};
 
 function lengthInput(app, value, onCommit, opts = {}) {
   const sys = app.project.unitSystem;
-  const input = el('input', { type: 'text', value: formatLength(value, sys, opts) });
+  const input = el('input', { type: 'text', class: 'dim', value: formatLength(value, sys, opts) });
   const commit = () => {
     const parsed = parseLength(input.value, sys);
     if (parsed !== null && (opts.allowZero || parsed > 0)) {
@@ -71,7 +81,8 @@ export function renderLayers(app, container) {
       el('button', {
         class: `eye${layer.visible ? '' : ' off'}`,
         title: layer.visible ? 'Hide layer' : 'Show layer',
-        text: layer.visible ? '👁' : '🚫',
+        'aria-label': layer.visible ? 'Hide layer' : 'Show layer',
+        html: layer.visible ? ICONS.eye : ICONS.eyeOff,
         onclick: (e) => {
           e.stopPropagation();
           layer.visible = !layer.visible;
@@ -82,7 +93,8 @@ export function renderLayers(app, container) {
       el('button', {
         class: `lock${layer.locked ? ' on' : ''}`,
         title: layer.locked ? 'Unlock layer' : 'Lock layer',
-        text: layer.locked ? '🔒' : '🔓',
+        'aria-label': layer.locked ? 'Unlock layer' : 'Lock layer',
+        html: layer.locked ? ICONS.lock : ICONS.unlock,
         onclick: (e) => {
           e.stopPropagation();
           layer.locked = !layer.locked;
@@ -90,7 +102,7 @@ export function renderLayers(app, container) {
           app.refreshAll();
         },
       }),
-      el('span', { class: 'swatch', style: `background:${layer.color}` }),
+      el('span', { class: 'swatch', style: `background:${layerColor(layer, app.canvasMode)}` }),
       el('span', { class: 'layer-name', text: layer.name }),
       el('span', { class: 'layer-count', text: String(counts.get(layer.id) || 0) }),
     ]);
@@ -425,7 +437,7 @@ export function renderProperties(app, container) {
     if (!ent) return;
     container.appendChild(el('h4', { text: describe(ent) }));
     const summary = geometrySummary(app, ent);
-    if (summary) container.appendChild(el('p', { class: 'muted small', text: summary }));
+    if (summary) container.appendChild(el('p', { class: 'muted small mono', text: summary }));
     for (const node of entityEditor(app, ent)) container.appendChild(node);
   }
 

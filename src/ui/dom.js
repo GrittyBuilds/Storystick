@@ -89,8 +89,15 @@ export function textInput(value, onCommit, opts = {}) {
  * Cells may be strings, numbers or DOM nodes.
  */
 export function table(headers, rows, opts = {}) {
-  const cellNode = (cell) =>
-    cell instanceof Node ? el('td', {}, [cell]) : el('td', { text: String(cell ?? '') });
+  // `opts.mono` lists the column indexes holding exact values — those cells are
+  // set in IBM Plex Mono per the brand's "mono means exact" rule.
+  const mono = new Set(opts.mono || []);
+  const cellNode = (cell, i) => {
+    const cls = mono.has(i) ? 'value' : null;
+    return cell instanceof Node
+      ? el('td', { class: cls }, [cell])
+      : el('td', { class: cls, text: String(cell ?? '') });
+  };
   return el('table', { class: `data-table${opts.compact ? ' compact' : ''}` }, [
     el('thead', {}, [el('tr', {}, headers.map((h) => el('th', { text: h })))]),
     el(

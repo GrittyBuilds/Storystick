@@ -21,7 +21,16 @@ import { Renderer } from './render/renderer.js';
 import { TOOL_ENTRIES, toolEntryById, toolByShortcut } from './tools/index.js';
 import { SelectTool } from './tools/select.js';
 import { buildTemplate } from './features/templates.js';
-import { saveProject, loadProject, lastOpened, deserializeProject, serializeProject } from './core/store.js';
+import {
+  saveProject,
+  loadProject,
+  lastOpened,
+  deserializeProject,
+  serializeProject,
+  loadCanvasMode,
+  saveCanvasMode,
+} from './core/store.js';
+import { CANVAS_MODES } from './render/theme.js';
 import { renderToolbar, renderToolOptions } from './ui/toolbar.js';
 import { renderLayers, renderPages, renderProperties } from './ui/panels.js';
 import {
@@ -58,6 +67,8 @@ export class App {
     this.dirty = false;
     this.autosaveTimer = null;
     this.statusMessage = '';
+    this.canvasMode = loadCanvasMode();
+    document.body.dataset.mode = this.canvasMode;
 
     this.defaults = {
       wall: { thickness: 5.5, status: 'new' },
@@ -441,10 +452,13 @@ export class App {
     return window.prompt(label, value ?? '');
   }
 
-  setStatus(message) {
+  setStatus(message, isError = false) {
     this.statusMessage = message;
     const node = document.getElementById('status-message');
-    if (node) node.textContent = message;
+    if (node) {
+      node.textContent = message;
+      node.classList.toggle('is-error', isError);
+    }
   }
 
   // --- rendering --------------------------------------------------------
@@ -454,6 +468,7 @@ export class App {
       project: this.project,
       page: this.page,
       viewport: this.viewport,
+      mode: this.canvasMode,
       selection: this.selection,
       hover: this.hover,
       snap: this.snap,
@@ -461,6 +476,31 @@ export class App {
       preview: this.activeTool.preview(),
     });
     this.refreshCoords();
+  }
+
+  /**
+   * Blueprint is the working mode; Paper is for printing, sharing and a screen
+   * in direct sun. Both are drawn on their own terms — see render/theme.js.
+   */
+  setCanvasMode(mode) {
+    if (!CANVAS_MODES.includes(mode) || mode === this.canvasMode) return;
+    this.canvasMode = mode;
+    document.body.dataset.mode = mode;
+    saveCanvasMode(mode);
+    this.refreshModeSwitch();
+    this.refreshAll();
+    this.setStatus(
+      mode === 'paper'
+        ? 'Paper mode — light canvas, the way the sheet prints.'
+        : 'Blueprint mode — dark canvas, chalk geometry.'
+    );
+  }
+
+  refreshModeSwitch() {
+    for (const mode of CANVAS_MODES) {
+      const node = document.getElementById(`mode-${mode}`);
+      if (node) node.classList.toggle('on', mode === this.canvasMode);
+    }
   }
 
   refreshAll() {
@@ -485,6 +525,8 @@ export class App {
   refreshTitle() {
     const node = document.getElementById('project-name');
     if (node) node.textContent = `${this.project.name}${this.dirty ? ' •' : ''}`;
+    const path = document.getElementById('project-path');
+    if (path) path.textContent = `/ ${this.page.name} / ${this.page.kind}`;
     document.title = `${this.project.name} — Storystick`;
   }
 
@@ -773,11 +815,19 @@ export class App {
       .map((part) => parseLength(part.trim(), this.project.unitSystem))
       .filter((v) => v !== null && Number.isFinite(v));
     if (!values.length) {
-      this.setStatus(`Could not read “${text}” as a length.`);
+      // Errors name the fix, not just the failure.
+      const example =
+        this.project.unitSystem === 'metric' ? '2600, 2.6m or 8\'-6"' : '8\', 8\'-6 1/2" or 102.5';
+      this.setStatus(`“${text}” isn’t a length Storystick can read. Try ${example}.`, true);
       return false;
     }
     const handled = this.activeTool.applyNumeric(values);
-    if (!handled) this.setStatus('That tool does not take a typed length right now.');
+    if (!handled) {
+      this.setStatus(
+        `${this.activeTool.constructor.label} has nothing to measure from yet — click a start point first.`,
+        true
+      );
+    }
     this.render();
     return handled;
   }
@@ -807,6 +857,8 @@ export class App {
       project: this.project,
       page: target,
       viewport,
+      // Exports print and get shared, so they always come out in Paper mode.
+      mode: 'paper',
       selection: new Set(),
       hover: null,
       snap: null,
@@ -857,6 +909,8 @@ export class App {
     on('toggle-osnap', () => this.toggleSetting('snapObject'));
     on('toggle-grid', () => this.toggleSetting('snapGrid'));
     on('toggle-ortho', () => this.toggleSetting('ortho'));
+    on('mode-blueprint', () => this.setCanvasMode('blueprint'));
+    on('mode-paper', () => this.setCanvasMode('paper'));
 
     const title = document.getElementById('project-name');
     if (title) {
@@ -888,6 +942,12 @@ export class App {
     });
 
     this.refreshToggles();
+    this.refreshModeSwitch();
+
+    // Canvas text is measured, so redraw once the brand faces have loaded.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => this.render()).catch(() => {});
+    }
   }
 }
 

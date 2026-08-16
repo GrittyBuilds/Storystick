@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Storystick — Interface Kit</title>
+<style>/*FONTS*/</style>
+<style>
+:root{
+  --blueprint:#0F2338; --ink:#0A1826; --canvas:#0B1A2B; --panel:#132B44; --panel-2:#1A3A58;
+  --blue:#1B5FA6; --sky:#3E86CE; --chalk:#A9C7E5;
+  --cedar:#D98235; --ember:#EFA860; --cedar-deep:#9E5813;
+  --vellum:#F7F4ED; --paper:#FFFFFF;
+  --graphite:#46525E; --slate:#65717C; --slate-40:#8A97A3; --mist:#E4E9EE;
+  --green:#1F9D6B; --green-deep:#177C54; --red:#D14343; --red-deep:#B93636;
+  --sans:'Inter',-apple-system,sans-serif; --brand:'Space Grotesk',var(--sans);
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --r-sm:6px; --r:9px; --r-lg:14px; --r-xl:20px;
+  --sp:8px;
+  --sh-1:0 1px 2px rgba(15,35,56,.07);
+  --sh-2:0 3px 10px rgba(15,35,56,.10);
+  --sh-3:0 12px 34px rgba(15,35,56,.16);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--vellum);color:var(--graphite);font-family:var(--sans);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1140px;margin:0 auto;padding:0 32px}
+h1,h2,h3,h4{font-family:var(--brand);color:var(--blueprint);font-weight:500;margin:0;letter-spacing:-.02em}
+h1{font-size:52px;line-height:1.05;letter-spacing:-.03em}
+h2{font-size:30px;margin-bottom:6px}
+h3{font-size:17px;margin-bottom:4px}
+h4{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate);font-weight:700;font-family:var(--sans)}
+p{margin:0 0 14px}
+section{padding:64px 0;border-top:1px solid var(--mist)}
+.head{background:var(--blueprint);position:relative;overflow:hidden;border:0}
+.head::before{content:"";position:absolute;inset:0;background-image:linear-gradient(#A9C7E5 1px,transparent 1px),linear-gradient(90deg,#A9C7E5 1px,transparent 1px);background-size:44px 44px;opacity:.07}
+.head .wrap{position:relative;padding-top:80px;padding-bottom:80px}
+.head h1{color:var(--vellum)} .head p{color:var(--chalk);max-width:58ch;font-size:18px}
+.head-logo{width:210px;margin-bottom:34px} .head-logo svg{width:100%;height:auto;display:block}
+.lede{font-size:18px;max-width:62ch}
+.small{font-size:13.5px} .muted{color:var(--slate)}
+.mono{font-family:var(--mono)}
+.sec-no{font-family:var(--mono);font-size:11.5px;color:var(--cedar-deep);letter-spacing:.16em;text-transform:uppercase;display:block;margin-bottom:8px}
+.grid{display:grid;gap:20px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:860px){.g2,.g3,.g4{grid-template-columns:1fr}.wrap{padding:0 18px}}
+.card{background:var(--paper);border:1px solid var(--mist);border-radius:var(--r-lg);padding:22px}
+.spec{font-family:var(--mono);font-size:11px;color:var(--slate);letter-spacing:.07em;text-transform:uppercase;margin-top:9px}
+.demo{background:var(--paper);border:1px solid var(--mist);border-radius:var(--r-lg);padding:26px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.demo.dk{background:var(--blueprint);border-color:var(--blueprint)}
+.demo.col{flex-direction:column;align-items:stretch}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--mist);vertical-align:top}
+th{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--slate);font-weight:400}
+td.mono{font-size:12px;color:var(--blueprint)}
+
+/* ================= COMPONENTS ================= */
+.btn{font-family:var(--sans);font-size:14px;font-weight:600;border-radius:var(--r);border:1px solid transparent;
+  padding:0 18px;height:40px;display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+  transition:background .12s,border-color .12s,color .12s;white-space:nowrap;letter-spacing:-.005em}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:#17518E}
+.btn-cedar{background:var(--cedar);color:#fff}
+.btn-cedar:hover{background:#C4741F}
+.btn-secondary{background:var(--paper);color:var(--blueprint);border-color:#C9D4DE}
+.btn-secondary:hover{background:var(--vellum);border-color:var(--slate-40)}
+.btn-ghost{background:transparent;color:var(--blue)}
+.btn-ghost:hover{background:#E9F0F8}
+.btn-danger{background:var(--red-deep);color:#fff}
+.btn[disabled]{background:var(--mist);color:var(--slate-40);border-color:var(--mist);cursor:not-allowed}
+.btn-sm{height:32px;font-size:13px;padding:0 13px;border-radius:var(--r-sm)}
+.btn-lg{height:50px;font-size:16px;padding:0 26px;border-radius:11px}
+.btn-focus{box-shadow:0 0 0 3px rgba(27,95,166,.32)}
+.dk .btn-secondary{background:transparent;color:var(--chalk);border-color:#33506E}
+.dk .btn-ghost{color:var(--chalk)}
+
+.field{display:flex;flex-direction:column;gap:6px;min-width:180px;flex:1}
+.field label{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--slate)}
+.input{height:40px;border:1px solid #C9D4DE;border-radius:var(--r);padding:0 12px;font-family:var(--sans);
+  font-size:14px;color:var(--blueprint);background:var(--paper);outline:none;width:100%}
+.input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(27,95,166,.18)}
+.input.dim{font-family:var(--mono);font-size:14px;letter-spacing:.02em}
+.input.err{border-color:var(--red);box-shadow:0 0 0 3px rgba(209,67,67,.15)}
+.hint{font-size:12px;color:var(--slate)}
+.hint.err{color:var(--red-deep);display:flex;gap:6px;align-items:center}
+.unit{display:inline-flex;border:1px solid #C9D4DE;border-radius:var(--r);overflow:hidden;background:var(--paper)}
+.unit button{font-family:var(--mono);font-size:12px;border:0;background:transparent;color:var(--slate);
+  padding:0 13px;height:38px;cursor:pointer;letter-spacing:.04em}
+.unit button.on{background:var(--blueprint);color:#fff}
+
+.chip{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:16px;
+  font-size:12.5px;font-weight:500;background:var(--mist);color:var(--graphite)}
+.chip.blue{background:#E3EDF7;color:#154C85} .chip.cedar{background:#FBEEE0;color:var(--cedar-deep)}
+.chip.green{background:#DFF1E9;color:var(--green-deep)} .chip.red{background:#FBE4E4;color:var(--red-deep)}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--mist)}
+.tabs button{font-family:var(--sans);font-size:14px;font-weight:500;background:none;border:0;
+  padding:11px 15px;color:var(--slate);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--blueprint);border-bottom-color:var(--cedar);font-weight:600}
+
+.alert{display:flex;gap:12px;padding:14px 16px;border-radius:var(--r);font-size:14px;align-items:flex-start;border:1px solid}
+.alert b{display:block;font-weight:600;color:var(--blueprint);margin-bottom:2px}
+.alert.info{background:#EDF3FA;border-color:#CFE0F0}
+.alert.ok{background:#E8F5EF;border-color:#C6E5D8}
+.alert.warn{background:#FCF1E4;border-color:#F0DCC3}
+.alert.err{background:#FBEDED;border-color:#F1D3D3}
+.alert .ic{width:20px;height:20px;flex:0 0 20px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:12px;font-weight:700;font-family:var(--mono)}
+.alert.info .ic{background:var(--blue)} .alert.ok .ic{background:var(--green-deep)}
+.alert.warn .ic{background:var(--cedar-deep)} .alert.err .ic{background:var(--red-deep)}
+
+/* ---- toolbar ---- */
+.toolbar{display:inline-flex;background:var(--panel);border:1px solid #23405E;border-radius:11px;padding:5px;gap:3px}
+.toolbar button{width:38px;height:38px;border:0;background:transparent;border-radius:7px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--chalk)}
+.toolbar button:hover{background:#1D3A57}
+.toolbar button.on{background:var(--cedar);color:#fff}
+.toolbar .sep{width:1px;background:#23405E;margin:5px 3px}
+.toolbar svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- app mock ---- */
+.app{border-radius:var(--r-lg);overflow:hidden;border:1px solid #23405E;background:var(--canvas);
+  display:grid;grid-template-columns:1fr 268px;box-shadow:var(--sh-3)}
+.app.light{border-color:var(--mist);background:var(--vellum)}
+.app-top{grid-column:1/-1;height:52px;background:var(--blueprint);display:flex;align-items:center;
+  gap:14px;padding:0 14px;border-bottom:1px solid #23405E}
+.app.light .app-top{background:var(--paper);border-bottom-color:var(--mist)}
+.app-top .nm{font-family:var(--brand);font-weight:500;color:var(--vellum);font-size:15px}
+.app.light .app-top .nm{color:var(--blueprint)}
+.app-top .path{font-family:var(--mono);font-size:11.5px;color:var(--slate-40);letter-spacing:.04em}
+.app-canvas{position:relative;min-height:400px}
+.app-side{background:var(--panel);border-left:1px solid #23405E;padding:16px}
+.app.light .app-side{background:var(--paper);border-left-color:var(--mist)}
+.app-side h4{color:var(--slate-40);margin-bottom:12px}
+.app.light .app-side h4{color:var(--slate)}
+.prop{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1F3B57;
+  font-size:13px;color:var(--chalk)}
+.app.light .prop{border-bottom-color:var(--mist);color:var(--graphite)}
+.prop .v{font-family:var(--mono);font-size:12.5px;color:#fff}
+.app.light .prop .v{color:var(--blueprint)}
+.prop .v.cedar{color:var(--ember)} .app.light .prop .v.cedar{color:var(--cedar-deep)}
+.cutlist{margin-top:20px;font-family:var(--mono);font-size:11.5px;color:var(--chalk);line-height:1.9}
+.app.light .cutlist{color:var(--graphite)}
+.cutlist .h{color:var(--ember);letter-spacing:.08em} .app.light .cutlist .h{color:var(--cedar-deep)}
+@media(max-width:860px){.app{grid-template-columns:1fr}.app-side{border-left:0;border-top:1px solid #23405E}}
+.tokentable td:first-child{width:34%}
+.swrow{display:flex;align-items:center;gap:10px}
+.swdot{width:22px;height:22px;border-radius:6px;border:1px solid rgba(15,35,56,.12);flex:0 0 22px}
+footer{background:var(--blueprint);padding:44px 0;color:var(--chalk)}
+footer .wrap{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
+footer .lg{flex:0 0 220px} footer .lg svg{width:100%;height:auto;display:block}
+footer .mono{font-size:12px;opacity:.7}
+</style>
+</head>
+<body>
+
+<section class="head">
+  <div class="wrap">
+    <div class="head-logo">{{svg:lockup-horizontal-reverse-nobg}}</div>
+    <h1>Interface Kit</h1>
+    <p>The components Storystick is built from — tokens, controls, both canvas modes, and the two shells they live in. Everything here uses only the brand palette and the three brand typefaces.</p>
+  </div>
+</section>
+
+<!-- TOKENS -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">01 — Tokens</span>
+    <h2>Design tokens</h2>
+    <p class="lede muted">Ship these as CSS custom properties. Component code should never contain a raw hex value.</p>
+    <div class="grid g2" style="margin-top:26px;align-items:start">
+      <div>
+        <h4>Color</h4>
+        <table class="tokentable" style="margin-top:10px">{{TOKENS_COLOR}}</table>
+      </div>
+      <div>
+        <h4>Space, radius, elevation</h4>
+        <table class="tokentable" style="margin-top:10px">
+          <tr><td class="mono">--sp</td><td>8&nbsp;px base. All spacing is a multiple: 4, 8, 12, 16, 24, 32, 48, 64.</td></tr>
+          <tr><td class="mono">--r-sm</td><td>6&nbsp;px — chips, small buttons, inline controls</td></tr>
+          <tr><td class="mono">--r</td><td>9&nbsp;px — buttons, inputs, alerts</td></tr>
+          <tr><td class="mono">--r-lg</td><td>14&nbsp;px — cards, panels, the app shell</td></tr>
+          <tr><td class="mono">--r-xl</td><td>20&nbsp;px — modals, hero surfaces</td></tr>
+          <tr><td class="mono">--sh-1</td><td>0 1px 2px rgba(15,35,56,.07) — resting cards</td></tr>
+          <tr><td class="mono">--sh-2</td><td>0 3px 10px rgba(15,35,56,.10) — dropdowns, hover lift</td></tr>
+          <tr><td class="mono">--sh-3</td><td>0 12px 34px rgba(15,35,56,.16) — modals, the app frame</td></tr>
+        </table>
+        <p class="small muted" style="margin-top:14px">Shadows are always tinted with Blueprint, never neutral black. It is a small thing that keeps the whole interface in one color family.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BUTTONS -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">02 — Actions</span>
+    <h2>Buttons</h2>
+    <div class="demo" style="margin-top:22px">
+      <button class="btn btn-primary">Start a drawing</button>
+      <button class="btn btn-secondary">Import a plan</button>
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-cedar">Add dimension</button>
+      <button class="btn btn-danger">Delete wall</button>
+      <button class="btn btn-primary" disabled>Unavailable</button>
+      <button class="btn btn-primary btn-focus">Focused</button>
+    </div>
+    <div class="spec">Height 40 · radius 9 · Inter SemiBold 14 · icon gap 8</div>
+    <div class="demo" style="margin-top:18px">
+      <button class="btn btn-primary btn-sm">Small</button>
+      <button class="btn btn-primary">Default</button>
+      <button class="btn btn-primary btn-lg">Large</button>
+    </div>
+    <div class="spec">32 / 40 / 50 px</div>
+    <div class="grid g2" style="margin-top:26px">
+      <div class="card"><h3>One cedar per screen</h3><p class="small muted" style="margin:0">Drafting Blue is the workhorse primary. Cedar is reserved for the single most important action in view — usually the one that commits a measurement. Two cedar buttons on one screen means neither is primary.</p></div>
+      <div class="card"><h3>Destructive is deep red</h3><p class="small muted" style="margin:0">Plumb Red Deep <span class="mono">#B93636</span>, never the bright Plumb Red, because buttons carry text and must clear 4.5:1.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- INPUTS -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">03 — Input</span>
+    <h2>Fields &amp; dimensions</h2>
+    <div class="demo" style="margin-top:22px;align-items:flex-start">
+      <div class="field"><label>Project name</label><input class="input" value="Guest bath — 2nd floor"><span class="hint">Prose fields are set in Inter.</span></div>
+      <div class="field"><label>Wall length</label><input class="input dim" value='12&apos;-4 1/2"'><span class="hint">Dimensions are always IBM Plex Mono.</span></div>
+      <div class="field" style="flex:0 0 auto"><label>Units</label>
+        <div class="unit"><button class="on">FT-IN</button><button>IN</button><button>MM</button></div>
+      </div>
+    </div>
+    <div class="demo" style="margin-top:16px;align-items:flex-start">
+      <div class="field"><label>Stud spacing</label><input class="input dim err" value='14 1/2"'>
+        <span class="hint err"><span style="font-family:var(--mono)">!</span> Not a standard spacing. Snap to 16" on-center?</span></div>
+      <div class="field"><label>Ceiling height</label><input class="input dim" value='8&apos;-0"'><span class="hint">Applies to every wall in this room.</span></div>
+    </div>
+    <p class="small muted" style="margin-top:18px;max-width:66ch">Errors never simply report. Each one names the likely fix and offers it as something the user can act on — that is the difference between an instrument and a form.</p>
+  </div>
+</section>
+
+<!-- STATUS -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">04 — Status</span>
+    <h2>Chips, tabs &amp; messages</h2>
+    <div class="demo" style="margin-top:22px">
+      <span class="chip blue"><span class="dot"></span>Draft</span>
+      <span class="chip green"><span class="dot"></span>Square</span>
+      <span class="chip cedar"><span class="dot"></span>Selected</span>
+      <span class="chip red"><span class="dot"></span>Out of tolerance</span>
+      <span class="chip">Archived</span>
+    </div>
+    <div class="tabs" style="margin-top:26px">
+      <button class="on">Plan</button><button>Elevation</button><button>Section</button><button>Materials</button><button>Cut list</button>
+    </div>
+    <div class="grid g2" style="margin-top:26px">
+      <div class="alert ok"><span class="ic">✓</span><div><b>Snapped to 16" on-center</b>Stud spacing is consistent across all four bays.</div></div>
+      <div class="alert warn"><span class="ic">!</span><div><b>This span needs a header</b>At 6'-0" wide, a 2×10 header is typical. Check your local code.</div></div>
+      <div class="alert info"><span class="ic">i</span><div><b>Cut list updated</b>Three parts changed when you moved the middle shelf.</div></div>
+      <div class="alert err"><span class="ic">×</span><div><b>Wall doesn't close</b>There's a 1/4" gap at the northeast corner. <a href="#" style="color:var(--red-deep);font-weight:600">Close it</a></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- TOOLBAR -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">05 — Tools</span>
+    <h2>Drawing toolbar</h2>
+    <div class="demo dk" style="margin-top:22px">{{TOOLBAR}}</div>
+    <div class="spec">38 px targets · 7 px radius · Cedar marks the active tool · icons 1.7 px stroke, round caps</div>
+    <p class="small muted" style="margin-top:16px;max-width:66ch">Only one thing on the canvas is cedar at a time: the active tool, or the selected geometry. That single rule is what stops the interface from turning orange.</p>
+  </div>
+</section>
+
+<!-- APP DARK -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">06 — Shell</span>
+    <h2>Blueprint mode</h2>
+    <p class="lede muted">The default. Dark canvas, chalk geometry, cedar on the selected element.</p>
+    <div class="app" style="margin-top:26px">
+      <div class="app-top">
+        <div style="width:22px">{{svg:mark-reverse-nobg}}</div>
+        <span class="nm">Guest bath</span>
+        <span class="path">/ 2nd floor / plan</span>
+        <span style="flex:1"></span>
+        <span class="chip cedar" style="height:24px;font-size:11.5px"><span class="dot"></span>Wall selected</span>
+        <button class="btn btn-cedar btn-sm">Add dimension</button>
+      </div>
+      <div class="app-canvas">{{CANVAS_DARK}}</div>
+      <div class="app-side">
+        <h4>Wall</h4>
+        <div class="prop"><span>Length</span><span class="v cedar">12'-4 1/2"</span></div>
+        <div class="prop"><span>Height</span><span class="v">8'-0"</span></div>
+        <div class="prop"><span>Thickness</span><span class="v">4 1/2"</span></div>
+        <div class="prop"><span>Studs</span><span class="v">10 @ 16" o.c.</span></div>
+        <div class="prop"><span>Square</span><span class="v" style="color:#3FCB95">✓ 90.0°</span></div>
+        <div class="cutlist">
+          <div class="h">CUT LIST · FRAMING</div>
+          <div>10 &nbsp;STUD &nbsp;&nbsp; 92-5/8"</div>
+          <div>2 &nbsp;&nbsp;PLATE &nbsp;&nbsp;148-1/2"</div>
+          <div>1 &nbsp;&nbsp;HEADER &nbsp;72"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- APP LIGHT -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">07 — Shell</span>
+    <h2>Paper mode</h2>
+    <p class="lede muted">For printing, for sharing, and for a phone screen in direct sun on a job site.</p>
+    <div class="app light" style="margin-top:26px">
+      <div class="app-top">
+        <div style="width:22px">{{svg:mark-nobg}}</div>
+        <span class="nm">Guest bath</span>
+        <span class="path">/ 2nd floor / plan</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-secondary btn-sm">Print set</button>
+        <button class="btn btn-primary btn-sm">Share</button>
+      </div>
+      <div class="app-canvas">{{CANVAS_LIGHT}}</div>
+      <div class="app-side">
+        <h4>Wall</h4>
+        <div class="prop"><span>Length</span><span class="v cedar">12'-4 1/2"</span></div>
+        <div class="prop"><span>Height</span><span class="v">8'-0"</span></div>
+        <div class="prop"><span>Thickness</span><span class="v">4 1/2"</span></div>
+        <div class="prop"><span>Studs</span><span class="v">10 @ 16" o.c.</span></div>
+        <div class="prop"><span>Square</span><span class="v" style="color:var(--green-deep)">✓ 90.0°</span></div>
+        <div class="cutlist">
+          <div class="h">CUT LIST · FRAMING</div>
+          <div>10 &nbsp;STUD &nbsp;&nbsp; 92-5/8"</div>
+          <div>2 &nbsp;&nbsp;PLATE &nbsp;&nbsp;148-1/2"</div>
+          <div>1 &nbsp;&nbsp;HEADER &nbsp;72"</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RULES -->
+<section>
+  <div class="wrap">
+    <span class="sec-no">08 — Rules</span>
+    <h2>Non-negotiables</h2>
+    <div class="grid g3" style="margin-top:24px">
+      <div class="card"><h3>Mono means exact</h3><p class="small muted" style="margin:0">Any value the user could mis-read by a sixteenth is IBM Plex Mono. Prose is Inter. There is no third case.</p></div>
+      <div class="card"><h3>Cedar is singular</h3><p class="small muted" style="margin:0">One cedar element per view: the active tool, the selected object, or the primary action. Never all three.</p></div>
+      <div class="card"><h3>Color is never alone</h3><p class="small muted" style="margin:0">Every state that uses color also changes a shape, an icon, or a label. Sun glare and color vision deficiency both defeat color-only signals.</p></div>
+      <div class="card"><h3>Touch targets are 40</h3><p class="small muted" style="margin:0">Nothing interactive is under 40&nbsp;px on touch. This app gets used with a pencil behind the ear and sawdust on the screen.</p></div>
+      <div class="card"><h3>Both modes ship</h3><p class="small muted" style="margin:0">Paper mode is not a dark-mode afterthought inverted. It is drawn, checked, and printed on its own terms.</p></div>
+      <div class="card"><h3>No raw hex</h3><p class="small muted" style="margin:0">Components reference tokens. When the palette shifts, one file changes.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="lg">{{svg:lockup-horizontal-reverse-nobg}}</div>
+    <div class="mono">Interface Kit v1.0 · August 2026<br>Draw it before you build it.</div>
+  </div>
+</footer>
+</body>
+</html>

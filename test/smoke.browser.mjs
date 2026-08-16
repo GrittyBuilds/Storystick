@@ -46,6 +46,44 @@ try {
   const toolCount = await page.locator('.tool-btn').count();
   check('the tool palette renders every tool', () => assert.equal(toolCount, 14));
 
+  // --- brand -------------------------------------------------------------
+  const typography = await page.evaluate(() => {
+    const coords = getComputedStyle(document.getElementById('status-coords')).fontFamily;
+    const name = getComputedStyle(document.getElementById('project-name')).fontFamily;
+    const body = getComputedStyle(document.body).fontFamily;
+    return { coords, name, body };
+  });
+  check('exact values are set in IBM Plex Mono', () => assert.match(typography.coords, /Plex Mono/));
+  check('the project name is set in Space Grotesk', () => assert.match(typography.name, /Space Grotesk/));
+  check('interface copy is set in Inter', () => assert.match(typography.body, /Inter/));
+
+  const activeTool = await page.evaluate(() => {
+    const btn = document.querySelector('.tool-btn.active');
+    return btn ? getComputedStyle(btn).backgroundColor : null;
+  });
+  check('cedar marks the active tool', () => assert.equal(activeTool, 'rgb(217, 130, 53)'));
+
+  const startMode = await page.evaluate(() => document.body.dataset.mode);
+  check('blueprint is the default canvas mode', () => assert.equal(startMode, 'blueprint'));
+
+  await page.click('#mode-paper');
+  await sleep(200);
+  const paperMode = await page.evaluate(() => ({
+    mode: document.body.dataset.mode,
+    shell: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+  }));
+  check('paper mode switches the canvas and the shell', () => {
+    assert.equal(paperMode.mode, 'paper');
+    assert.equal(paperMode.shell, 'rgb(255, 255, 255)');
+  });
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await sleep(400);
+  const remembered = await page.evaluate(() => document.body.dataset.mode);
+  check('the chosen canvas mode survives a reload', () => assert.equal(remembered, 'paper'));
+  await page.click('#mode-blueprint');
+  await sleep(200);
+
   const loadTemplate = async (label) => {
     await page.click('#btn-new');
     await page.click(`button.card:has-text("${label}")`);

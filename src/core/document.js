@@ -3,20 +3,25 @@
 import { uid } from './entities.js';
 import { defaultGrid } from './units.js';
 
-export const FILE_VERSION = 1;
+export const FILE_VERSION = 2;
 
+// `color` is the Paper-mode stroke, `colorDark` the Blueprint-mode stroke, and
+// `weight` is the plotted line weight in millimetres from the brand's line
+// weight table. See src/render/theme.js.
 export const DEFAULT_LAYERS = [
-  { id: 'walls', name: 'Walls — New', color: '#1f2933', weight: 1.6, dash: null },
-  { id: 'existing', name: 'Walls — Existing', color: '#8a94a6', weight: 1.2, dash: null },
-  { id: 'demo', name: 'Walls — Demo', color: '#c2410c', weight: 1.2, dash: [8, 5] },
-  { id: 'openings', name: 'Doors & Windows', color: '#0f766e', weight: 1.1, dash: null },
-  { id: 'rooms', name: 'Rooms', color: '#2563eb', weight: 1, dash: null },
-  { id: 'parts', name: 'Woodworking Parts', color: '#7c3aed', weight: 1.2, dash: null },
-  { id: 'furniture', name: 'Fixtures & Furniture', color: '#475569', weight: 1, dash: null },
-  { id: 'dimensions', name: 'Dimensions', color: '#b91c1c', weight: 0.9, dash: null },
-  { id: 'notes', name: 'Notes & Text', color: '#111827', weight: 0.9, dash: null },
-  { id: 'sketch', name: 'Sketch', color: '#94a3b8', weight: 0.8, dash: [4, 4] },
+  { id: 'walls', name: 'Walls — New', color: '#0F2338', colorDark: '#A9C7E5', weight: 0.7, dash: null },
+  { id: 'existing', name: 'Walls — Existing', color: '#8A97A3', colorDark: '#5E7A97', weight: 0.35, dash: null },
+  { id: 'demo', name: 'Walls — Demo', color: '#B93636', colorDark: '#D14343', weight: 0.35, dash: [8, 5] },
+  { id: 'openings', name: 'Doors & Windows', color: '#1B5FA6', colorDark: '#3E86CE', weight: 0.5, dash: null },
+  { id: 'rooms', name: 'Rooms', color: '#65717C', colorDark: '#7E9BB8', weight: 0.18, dash: null },
+  { id: 'parts', name: 'Woodworking Parts', color: '#46525E', colorDark: '#A9C7E5', weight: 0.5, dash: null },
+  { id: 'furniture', name: 'Fixtures & Furniture', color: '#65717C', colorDark: '#7E9BB8', weight: 0.35, dash: null },
+  { id: 'dimensions', name: 'Dimensions', color: '#1B5FA6', colorDark: '#3E86CE', weight: 0.25, dash: null },
+  { id: 'notes', name: 'Notes & Text', color: '#46525E', colorDark: '#A9C7E5', weight: 0.25, dash: null },
+  { id: 'sketch', name: 'Sketch', color: '#8A97A3', colorDark: '#5E7A97', weight: 0.18, dash: [4, 4] },
 ];
+
+const DEFAULT_LAYER_WEIGHTS = new Map(DEFAULT_LAYERS.map((l) => [l.id, l.weight]));
 
 export const DEFAULT_MATERIALS = [
   { id: 'ply-3/4', name: '3/4" Plywood', form: 'sheet', thickness: 0.75, stockW: 48, stockL: 96, cost: 68 },
@@ -116,8 +121,9 @@ export function addLayer(project, name) {
   const layer = {
     id: uid('ly'),
     name: name || `Layer ${project.layers.length + 1}`,
-    color: '#334155',
-    weight: 1,
+    color: '#46525E',
+    colorDark: '#A9C7E5',
+    weight: 0.35,
     dash: null,
     visible: true,
     locked: false,
@@ -240,18 +246,39 @@ export function normalizeProject(raw) {
   if (typeof raw.kind === 'string') project.kind = raw.kind;
   if (raw.meta && typeof raw.meta === 'object') project.meta = { ...base.meta, ...raw.meta };
 
+  // Files written before version 2 stored line weights as arbitrary screen
+  // pixels; version 2 stores plotted millimetres from the brand weight table.
+  const legacyWeights = !Number.isFinite(raw.version) || raw.version < 2;
+  const migrateWeight = (id, weight) => {
+    if (!Number.isFinite(weight)) return 0.35;
+    if (!legacyWeights) return Math.min(2, Math.max(0.05, weight));
+    if (DEFAULT_LAYER_WEIGHTS.has(id)) return DEFAULT_LAYER_WEIGHTS.get(id);
+    return Math.min(0.7, Math.max(0.18, weight * 0.44));
+  };
+  const defaultsById = new Map(DEFAULT_LAYERS.map((l) => [l.id, l]));
+
   if (Array.isArray(raw.layers) && raw.layers.length) {
     project.layers = raw.layers
       .filter((l) => l && typeof l.id === 'string')
-      .map((l) => ({
-        id: l.id,
-        name: String(l.name ?? l.id),
-        color: typeof l.color === 'string' ? l.color : '#334155',
-        weight: Number.isFinite(l.weight) ? l.weight : 1,
-        dash: Array.isArray(l.dash) ? l.dash : null,
-        visible: l.visible !== false,
-        locked: !!l.locked,
-      }));
+      .map((l) => {
+        const preset = defaultsById.get(l.id);
+        return {
+          id: l.id,
+          name: String(l.name ?? l.id),
+          color:
+            typeof l.color === 'string' && !legacyWeights
+              ? l.color
+              : (preset && preset.color) || (typeof l.color === 'string' ? l.color : '#46525E'),
+          colorDark:
+            typeof l.colorDark === 'string'
+              ? l.colorDark
+              : (preset && preset.colorDark) || '#A9C7E5',
+          weight: migrateWeight(l.id, l.weight),
+          dash: Array.isArray(l.dash) ? l.dash : (preset && preset.dash) || null,
+          visible: l.visible !== false,
+          locked: !!l.locked,
+        };
+      });
   }
   if (!project.layers.length) project.layers = base.layers;
 

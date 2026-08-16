@@ -4,6 +4,7 @@
 import * as g from '../core/geometry.js';
 import { wallSpans, wallLength, openingFrame, outlines } from '../core/entities.js';
 import { formatLength, formatArea } from '../core/units.js';
+import { palette, layerColor, wallStatusColor, mmToPx, TOKEN } from '../render/theme.js';
 import { buildCutList } from './cutlist.js';
 import { scheduleSummary } from './schedule.js';
 import { buildEstimate } from './estimate.js';
@@ -40,39 +41,54 @@ function arcPath(c, r, a0, a1, attrs) {
   )} ${n(end.y)}" ${attrs}/>`;
 }
 
-function textEl(at, text, size, color, anchor = 'middle', rotate = 0) {
-  const transform = rotate ? ` transform="rotate(${n((rotate * 180) / Math.PI)} ${n(at.x)} ${n(at.y)})"` : '';
-  return `<text x="${n(at.x)}" y="${n(at.y)}" font-size="${n(size)}" fill="${color}" text-anchor="${anchor}" font-family="Helvetica, Arial, sans-serif"${transform}>${esc(
-    text
-  )}</text>`;
+// Exports are always drawn in Paper mode: they exist to be printed and shared.
+const PAPER = palette('paper');
+
+const FONT_STACK = {
+  sans: "'Inter', Helvetica, Arial, sans-serif",
+  mono: "'IBM Plex Mono', ui-monospace, Menlo, monospace",
+  brand: "'Space Grotesk', 'Inter', Helvetica, sans-serif",
+};
+
+function textEl(at, text, size, color, opts = {}) {
+  const { anchor = 'middle', rotate = 0, font = 'sans', weight = 400, tracking } = opts;
+  const transform = rotate
+    ? ` transform="rotate(${n((rotate * 180) / Math.PI)} ${n(at.x)} ${n(at.y)})"`
+    : '';
+  const spacing = tracking ? ` letter-spacing="${tracking}"` : '';
+  return `<text x="${n(at.x)}" y="${n(at.y)}" font-size="${n(size)}" fill="${color}" text-anchor="${anchor}" font-family="${
+    FONT_STACK[font]
+  }" font-weight="${weight}"${spacing}${transform}>${esc(text)}</text>`;
 }
 
-function strokeAttrs(color, weight, dash) {
+/** `weightMm` is a plotted line weight from the brand weight table. */
+function strokeAttrs(color, weightMm, dash) {
   const dashAttr = dash ? ` stroke-dasharray="${dash.join(' ')}"` : '';
-  return `fill="none" stroke="${color}" stroke-width="${weight}" vector-effect="non-scaling-stroke"${dashAttr}`;
+  return `fill="none" stroke="${color}" stroke-width="${n(
+    mmToPx(weightMm || 0.35)
+  )}" vector-effect="non-scaling-stroke"${dashAttr}`;
 }
 
-/** One pass of a wall: `fill` lays the body down, `stroke` draws its outline. */
+/** One pass of a wall: `fill` lays the poché down, `stroke` draws its outline. */
 function wallSvg(ent, page, layer, pass) {
   const total = wallLength(ent) || 1;
   const isDemo = ent.status === 'demo';
   if (pass === 'fill' && isDemo) return '';
-  const stroke = isDemo ? '#c2410c' : ent.status === 'existing' ? '#8a94a6' : layer.color;
-  const fill = ent.status === 'existing' ? '#e6e2d8' : '#d9d4c8';
+  const status = wallStatusColor(ent.status, 'paper');
+  const stroke = status ? status.color : layerColor(layer, 'paper');
+  const fill = ent.status === 'existing' ? PAPER.wallFillExisting : PAPER.wallFill;
   const attrs =
     pass === 'fill'
       ? `fill="${fill}" stroke="none"`
-      : `fill="none" stroke="${stroke}" stroke-width="${layer.weight || 1}" vector-effect="non-scaling-stroke"${
-          isDemo ? ' stroke-dasharray="8 5"' : ''
-        }`;
+      : strokeAttrs(stroke, layer.weight, status ? status.dash : layer.dash);
   return wallSpans(ent, page)
     .map((s) => polygonEl(g.thickSegmentQuad(ent.a, ent.b, ent.thickness, s[0] / total, s[1] / total), attrs))
     .join('');
 }
 
 function entitySvg(ent, project, page, layer) {
-  const color = layer.color;
-  const weight = layer.weight || 1;
+  const color = layerColor(layer, 'paper');
+  const weight = layer.weight || 0.35;
   const out = [];
 
   switch (ent.type) {
@@ -100,7 +116,7 @@ function entitySvg(ent, project, page, layer) {
         let sweep = other - a0;
         while (sweep > Math.PI) sweep -= Math.PI * 2;
         while (sweep < -Math.PI) sweep += Math.PI * 2;
-        out.push(arcPath(hinge, ent.width, a0, a0 + sweep, strokeAttrs(color, weight * 0.6, [4, 3])));
+        out.push(arcPath(hinge, ent.width, a0, a0 + sweep, strokeAttrs(color, 0.18, [4, 3])));
       }
       break;
     }
@@ -108,14 +124,20 @@ function entitySvg(ent, project, page, layer) {
       out.push(
         polygonEl(
           ent.pts,
-          `fill="rgba(37,99,235,0.07)" stroke="${color}" stroke-width="${weight}" vector-effect="non-scaling-stroke"`
+          `fill="${PAPER.roomFill}" stroke="${color}" stroke-width="${n(
+            mmToPx(weight)
+          )}" vector-effect="non-scaling-stroke"`
         )
       );
       const c = g.polygonCentroid(ent.pts);
       const area = Math.abs(g.polygonArea(ent.pts));
       const size = Math.max(4, Math.sqrt(area) / 14);
-      out.push(textEl(c, ent.name, size, color));
-      out.push(textEl({ x: c.x, y: c.y + size * 1.3 }, formatArea(area, project.unitSystem), size * 0.85, color));
+      out.push(textEl(c, ent.name, size, color, { font: 'sans', weight: 500 }));
+      out.push(
+        textEl({ x: c.x, y: c.y + size * 1.35 }, formatArea(area, project.unitSystem), size * 0.8, color, {
+          font: 'mono',
+        })
+      );
       break;
     }
     case 'part': {
@@ -123,24 +145,32 @@ function entitySvg(ent, project, page, layer) {
       out.push(
         polygonEl(
           pts,
-          `fill="rgba(124,58,237,0.12)" stroke="${color}" stroke-width="${weight}" vector-effect="non-scaling-stroke"`
+          `fill="${PAPER.partFill}" stroke="${color}" stroke-width="${n(
+            mmToPx(weight)
+          )}" vector-effect="non-scaling-stroke"`
         )
       );
       const c = g.lerp(ent.a, ent.b, 0.5);
       const w = Math.abs(ent.b.x - ent.a.x);
       const h = Math.abs(ent.b.y - ent.a.y);
       const size = Math.max(3, Math.min(w, h) / 8);
-      out.push(textEl(c, ent.qty > 1 ? `${ent.name} ×${ent.qty}` : ent.name, size, color));
+      out.push(
+        textEl(c, ent.qty > 1 ? `${ent.name} ×${ent.qty}` : ent.name, size, color, {
+          font: 'sans',
+          weight: 500,
+        })
+      );
       out.push(
         textEl(
-          { x: c.x, y: c.y + size * 1.3 },
+          { x: c.x, y: c.y + size * 1.35 },
           `${formatLength(Math.max(w, h), project.unitSystem, { forceInches: true })} × ${formatLength(
             Math.min(w, h),
             project.unitSystem,
             { forceInches: true }
           )}`,
-          size * 0.85,
-          color
+          size * 0.8,
+          color,
+          { font: 'mono' }
         )
       );
       break;
@@ -152,7 +182,7 @@ function entitySvg(ent, project, page, layer) {
       const off = g.mul(nrm, ent.offset);
       const a2 = g.add(ent.a, off);
       const b2 = g.add(ent.b, off);
-      const attrs = strokeAttrs(color, weight * 0.8, null);
+      const attrs = strokeAttrs(PAPER.dimensionLine, weight, null);
       out.push(lineEl(ent.a, a2, attrs));
       out.push(lineEl(ent.b, b2, attrs));
       out.push(lineEl(a2, b2, attrs));
@@ -169,15 +199,14 @@ function entitySvg(ent, project, page, layer) {
           { x: mid.x - nrm.x * size * 0.5, y: mid.y - nrm.y * size * 0.5 },
           formatLength(g.dist(ent.a, ent.b), project.unitSystem, { denominator: project.denominator }),
           size,
-          color,
-          'middle',
-          angle
+          PAPER.dimensionText,
+          { rotate: angle, font: 'mono', weight: 500 }
         )
       );
       break;
     }
     case 'text': {
-      out.push(textEl(ent.p, ent.text, ent.size, color, 'start', ent.rot || 0));
+      out.push(textEl(ent.p, ent.text, ent.size, color, { anchor: 'start', rotate: ent.rot || 0 }));
       break;
     }
     case 'circle': {
@@ -233,7 +262,7 @@ export function pageToSvg(project, page, options = {}) {
   const titleHeight = options.titleBlock === false ? 0 : Math.max(28, height * 0.08);
 
   const sorted = [...visible].sort((a, b) => (Z_ORDER[a.type] ?? 2) - (Z_ORDER[b.type] ?? 2));
-  const layerOf = (ent) => layers.get(ent.layer) || { color: '#333', weight: 1, dash: null };
+  const layerOf = (ent) => layers.get(ent.layer) || { color: TOKEN.blueprint, weight: 0.35, dash: null };
   const walls = sorted.filter((e) => e.type === 'wall');
   const wallBlock = [
     ...walls.map((w) => wallSvg(w, page, layerOf(w), 'fill')),
@@ -253,30 +282,73 @@ export function pageToSvg(project, page, options = {}) {
   if (!wallsEmitted) chunks.push(wallBlock);
   const body = chunks.filter(Boolean).join('\n  ');
 
-  const titleY = box.maxY + titleHeight * 0.62;
+  // Title block: a Blueprint band carrying the project in Space Grotesk and
+  // every hard fact — sheet, scale, date — in IBM Plex Mono.
+  const pad = margin * 0.6;
   const titleSize = titleHeight * 0.3;
+  const metaSize = titleSize * 0.62;
+  const meta = [
+    page.name,
+    page.scale,
+    project.meta.date || new Date().toISOString().slice(0, 10),
+    project.meta.client ? `CLIENT ${project.meta.client}` : null,
+  ]
+    .filter(Boolean)
+    .join('   ·   ');
+
   const titleBlock =
     titleHeight === 0
       ? ''
       : [
-          `<line x1="${n(box.minX)}" y1="${n(box.maxY)}" x2="${n(box.maxX)}" y2="${n(box.maxY)}" stroke="#1f2933" stroke-width="1" vector-effect="non-scaling-stroke"/>`,
-          textEl({ x: box.minX + margin * 0.5, y: titleY }, project.name, titleSize, '#1f2933', 'start'),
+          `<rect x="${n(box.minX)}" y="${n(box.maxY)}" width="${n(width)}" height="${n(
+            titleHeight
+          )}" fill="${TOKEN.blueprint}"/>`,
+          `<rect x="${n(box.minX)}" y="${n(box.maxY)}" width="${n(width)}" height="${n(
+            titleHeight * 0.06
+          )}" fill="${TOKEN.cedar}"/>`,
           textEl(
-            { x: box.maxX - margin * 0.5, y: titleY },
-            `${page.name}  ·  ${page.scale}  ·  ${project.meta.date || new Date().toISOString().slice(0, 10)}`,
-            titleSize * 0.7,
-            '#4b5563',
-            'end'
+            { x: box.minX + pad, y: box.maxY + titleHeight * 0.52 },
+            project.name,
+            titleSize,
+            TOKEN.vellum,
+            { anchor: 'start', font: 'brand', weight: 500 }
+          ),
+          textEl(
+            { x: box.minX + pad, y: box.maxY + titleHeight * 0.84 },
+            meta,
+            metaSize,
+            TOKEN.chalk,
+            { anchor: 'start', font: 'mono', tracking: '0.06em' }
+          ),
+          textEl(
+            { x: box.maxX - pad, y: box.maxY + titleHeight * 0.52 },
+            'STORYSTICK',
+            metaSize,
+            TOKEN.chalk,
+            { anchor: 'end', font: 'mono', tracking: '0.18em' }
+          ),
+          textEl(
+            { x: box.maxX - pad, y: box.maxY + titleHeight * 0.84 },
+            'Draw it before you build it.',
+            metaSize * 0.92,
+            TOKEN.sky,
+            { anchor: 'end', font: 'sans' }
           ),
         ].join('\n  ');
 
+  // The viewBox stays in model inches so the drawing is dimensionally true;
+  // width/height only decide how large the sheet opens on screen.
+  const sheetHeight = height + titleHeight;
+  const displayScale = Math.min(3, Math.max(0.25, 1100 / Math.max(width, sheetHeight)));
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${n(box.minX)} ${n(box.minY)} ${n(width)} ${n(
-    height + titleHeight
-  )}" width="${n(width)}" height="${n(height + titleHeight)}">
+    sheetHeight
+  )}" width="${n(width * displayScale)}" height="${n(sheetHeight * displayScale)}">
+  <title>${esc(project.name)} — ${esc(page.name)}</title>
   <rect x="${n(box.minX)}" y="${n(box.minY)}" width="${n(width)}" height="${n(
-    height + titleHeight
-  )}" fill="#ffffff"/>
+    sheetHeight
+  )}" fill="${TOKEN.paper}"/>
   ${body}
   ${titleBlock}
 </svg>`;
