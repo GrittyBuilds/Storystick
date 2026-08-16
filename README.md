@@ -29,9 +29,96 @@ local storage automatically, and can be exported to a `.storystick` file to
 move between machines.
 
 ```bash
-npm test           # unit tests for units, geometry, documents, takeoffs
-npm run smoke      # end-to-end browser test (needs the optional playwright dep)
+npm test              # 185 unit tests — units, geometry, documents, 3D, codes, structural
+npm run smoke         # 22 end-to-end browser checks (needs the optional playwright dep)
+npm run smoke:mobile  # 9 checks on a phone and tablet viewport
 ```
+
+### Mobile and desktop
+
+The same code runs everywhere. Under 860 px the shell reflows: the action row
+collapses into a menu, the tool palette becomes a bottom scroller, and the side
+panels become a bottom sheet. One finger draws, two fingers pan and pinch, long
+press selects. Touch input is offset above the fingertip with a crosshair on the
+true target, because a fingertip covers most of a stud bay at working zoom.
+
+It installs as a PWA and works offline. For a real desktop app:
+
+```bash
+npm run desktop:install   # fetches Electron (not vendored)
+npm run desktop
+```
+
+That adds native open/save dialogs, an application menu and `.storystick` file
+association, with context isolation on, node integration off and a strict CSP.
+
+## 3D
+
+Any sheet extrudes into a solid model: walls rise to the project wall height and
+keep their status material, doors and windows become real voids with headers
+above and sills below, windows get glazing, rooms become floor slabs, and the
+footprint generates a gable, hip or flat roof at a pitch and overhang you set.
+Woodworking parts become boards of their own thickness. Orbit with a drag, pan
+with two fingers or a right-drag, zoom with the wheel or a pinch, and save the
+view as a PNG.
+
+The renderer is hand-written WebGL — about 1,250 lines against roughly 750 KB
+for the smallest usable three.js build, and it keeps the app's no-build-step
+property. The geometry layer is DOM-free and unit tested, including ray-cast
+solid-membership tests proving a doorway is genuinely a void.
+
+The massing is honest rather than photographic. The roof is generated from the
+bounding box of the walls, so an L-shaped plan gets a rectangular roof floating
+over the notch; wall corners are handled by overlap rather than mitring.
+
+## Code checking
+
+**Storystick ships no Michigan code values.** Not one could be verified against
+a primary source, so rather than hardcode numbers that look authoritative, the
+app catalogues the *requirements* — 26 of them, each with its label, unit and
+the section to look it up in — and leaves every value empty until you confirm
+it in Code settings against your own code book. A confirmed value records where
+it came from and when, and travels with the project file.
+
+Checks come in two kinds, and the difference is the whole point:
+
+- **Drawing checks** are answerable from the plan alone and give real answers
+  with no code data at all. A sleeping room with no door and no window is a
+  problem in every edition of every code; an opening taller than its wall is a
+  geometric fact.
+- **Threshold checks** need a number from the code. They measure the drawing,
+  name the requirement and the section, and then either compare against a value
+  you have confirmed — or report **needs checking** with the measurement and
+  where to look. They never guess.
+
+Findings have four outcomes: *does not meet*, *needs checking*, *meets*, *not
+applicable*. A check that crashes becomes *needs checking*, never a silent pass.
+Where the drawing genuinely cannot answer — a window's net clear opening depends
+on the unit installed, not on the rough opening — Storystick says so and gives
+the bound rather than a verdict.
+
+Every finding names what to do about it, and can jump you to the thing it is
+about.
+
+## Structural checking
+
+Allowable-stress arithmetic on a simply supported, uniformly loaded member:
+bending, shear, live and total deflection, and bearing, each reported with its
+margin and which one governs. It also sizes the shallowest member that works and
+generates a span table you can compare against the published one.
+
+The mechanics are edition-independent and verified — the section-property
+formulas reproduce the published values for a 2x10 (S = 21.39 in³, I = 98.93
+in⁴), and each span solver exactly inverts its own stress check. The *reference
+design values* are not: Fb, Fv, Fc⊥ and E are species-, grade- and
+edition-specific, so they ship empty and you enter them from the NDS Supplement,
+your grading agency, or the grade stamp on the material. Until you do, the tool
+will not calculate.
+
+This is a design aid, not engineering. It covers one simply supported member and
+nothing else: no point loads, no cantilevers, no continuous spans, no notches or
+holes, and nothing about the load path below. The assumptions are printed with
+every result.
 
 ## Two canvas modes
 
@@ -159,6 +246,21 @@ src/
     viewport.js       screen <-> model transform
     theme.js          the two canvas palettes and the brand line weight table
     renderer.js       canvas renderer (world transform, screen-constant weights)
+  model3d/
+    mesh.js           mesh primitives, ear clipping, polygon extrusion
+    build.js          plan to solids: walls, openings, slabs, roofs, parts
+    mat4.js           matrix and vector maths
+    viewer.js         WebGL viewer, orbit camera, two-pass transparency
+  codes/
+    context.js        what the drawing measurably contains, and what it cannot
+    engine.js         rule evaluation: pass / fail / needs checking / n-a
+    jurisdiction.js   code requirements as data, with provenance per value
+    rules.js          drawing rules and threshold rules
+  engineering/
+    sections.js       dressed lumber sizes and NDS adjustment factors
+    beam.js           simple-span mechanics and the span solvers
+    species.js        reference design values (empty until confirmed)
+    analysis.js       limit-state checks, member sizing, span tables
   tools/              one file per interaction: select, draw, build
   features/
     cutlist.js        part collection, sheet and board optimisation
@@ -180,8 +282,19 @@ DOM only appears in `src/ui`, `src/render` and `src/app.js`.
   structural engineering.
 - The estimate is a rough order of magnitude built from default unit prices.
   It is a starting point for a conversation with a supplier, not a quote.
-- Storystick does not check building codes. Confirm setbacks, permits, egress,
-  headers and whether a wall is load-bearing before you cut anything.
+- The code check is a design aid, not a plan review and not a code
+  determination. It checks what a plan can show; it cannot see construction,
+  materials, systems or workmanship. Your building official decides compliance.
+- Only construction-code items are checked. Zoning setbacks, floodplain,
+  historic districts, soil erosion and local fire requirements are administered
+  separately and are not covered.
+- The structural check is arithmetic on values you supply, for one simply
+  supported uniformly loaded member. Anything structural that matters should be
+  reviewed by a licensed engineer.
+- Which edition of the Michigan Residential Code is currently in force could not
+  be confirmed, and it has been the subject of litigation. Confirm it with the
+  Bureau of Construction Codes or your building official before relying on any
+  section number.
 - The bundled typefaces are SIL OFL 1.1 — free to use, embed and ship. The
   licence files stay alongside them in `brand/fonts/`.
 - The brand package's own README flags trademark screening as unfinished: a

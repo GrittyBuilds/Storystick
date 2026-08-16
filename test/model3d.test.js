@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProject, activePage } from '../src/core/document.js';
-import { makeWall, makeOpening, makeRoom, makePart } from '../src/core/entities.js';
+import {
+  makeWall,
+  makeOpening,
+  makeRoom,
+  makePart,
+  openingHead,
+  openingSill,
+  openingUnitHeight,
+} from '../src/core/entities.js';
 import { buildModel, wallFootprint, MATERIALS } from '../src/model3d/build.js';
 import {
   MeshBuilder,
@@ -86,7 +94,8 @@ function roomProject() {
   page.entities.push(south, east, north, west);
   page.entities.push(
     makeOpening(south.id, 0.5, 'openings', 'door', 36, { height: 80 }),
-    makeOpening(east.id, 0.5, 'openings', 'window', 24, { height: 60, sill: 36 })
+    // 2'0" wide x 4'0" tall window with a 3'0" sill: head lands at 84".
+    makeOpening(east.id, 0.5, 'openings', 'window', 24, { height: 48, sill: 36 })
   );
   page.entities.push(
     makeRoom([{ x: 3, y: 3 }, { x: 117, y: 3 }, { x: 117, y: 93 }, { x: 3, y: 93 }], 'rooms', 'Shop')
@@ -169,6 +178,57 @@ test('an extruded square is a closed box with outward normals', () => {
   }
 });
 
+test('every triangle is wound to agree with its own normal', () => {
+  // Backface culling removes triangles whose winding disagrees with the way
+  // they face. Checking that a normal points outward is not enough — the
+  // winding has to point the same way, or the visible face is the one culled.
+  const project = createProject({});
+  const page = activePage(project);
+  const wall = makeWall({ x: 0, y: 0 }, { x: 120, y: 0 }, 'walls', 6, 'new');
+  page.entities.push(
+    wall,
+    makeOpening(wall.id, 0.5, 'openings', 'window', 36, { sill: 30, height: 48 }),
+    makeRoom([{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 96 }, { x: 0, y: 96 }], 'rooms', 'R'),
+    makePart({ x: 0, y: 120 }, { x: 48, y: 144 }, 'parts', { thickness: 0.75 })
+  );
+  const model = buildModel(project, page, { roofStyle: 'gable' });
+
+  let mismatched = 0;
+  let checked = 0;
+  for (const mesh of model.meshes) {
+    // The roof is deliberately double-sided, so it is exempt.
+    if (mesh.material === 'roof') continue;
+    for (let i = 0; i < mesh.indices.length; i += 3) {
+      const vertex = (k) => [
+        mesh.positions[k * 3],
+        mesh.positions[k * 3 + 1],
+        mesh.positions[k * 3 + 2],
+      ];
+      const geometric = faceNormal(
+        vertex(mesh.indices[i]),
+        vertex(mesh.indices[i + 1]),
+        vertex(mesh.indices[i + 2])
+      );
+      if (!geometric) continue;
+      const k = mesh.indices[i];
+      const stored = [mesh.normals[k * 3], mesh.normals[k * 3 + 1], mesh.normals[k * 3 + 2]];
+      const dot = geometric[0] * stored[0] + geometric[1] * stored[1] + geometric[2] * stored[2];
+      checked += 1;
+      if (dot < 0.99) mismatched += 1;
+    }
+  }
+  assert.ok(checked > 50, 'the fixture actually produced geometry');
+  assert.equal(mismatched, 0, `${mismatched} of ${checked} triangles are wound inside out`);
+});
+
+test('merging a large mesh does not overflow the call stack', () => {
+  const source = new MeshBuilder('a');
+  for (let i = 0; i < 20000; i += 1) source.triangle([i, 0, 0], [i + 1, 0, 0], [i, 1, 0], [0, 0, 1]);
+  const target = new MeshBuilder('b');
+  target.merge(source);
+  assert.equal(target.triangleCount, 20000);
+});
+
 test('extrusion winding is independent of the input winding', () => {
   const cw = new MeshBuilder('a');
   const ccw = new MeshBuilder('b');
@@ -219,10 +279,10 @@ test('a window opening has a sill below and a header above', () => {
   const model = buildModel(project, page, { includeRoof: false, includeFloors: false });
   const wall = model.meshes.find((m) => m.material === 'wallNew');
 
-  // The window sits mid-span on the east wall (x = 120), sill 36", head 60".
+  // Sill 36", 48" tall, so the head is at 84".
   assert.equal(insideSolid(wall, [120, 20, 48]), true, 'solid below the sill');
-  assert.equal(insideSolid(wall, [120, 48, 48]), false, 'open between sill and head');
-  assert.equal(insideSolid(wall, [120, 78, 48]), true, 'solid above the head');
+  assert.equal(insideSolid(wall, [120, 60, 48]), false, 'open between sill and head');
+  assert.equal(insideSolid(wall, [120, 90, 48]), true, 'solid above the head');
 });
 
 test('windows produce glazing between sill and head', () => {
@@ -232,7 +292,45 @@ test('windows produce glazing between sill and head', () => {
   assert.ok(glass, 'a glazing mesh exists');
   const bounds = meshBounds([glass]);
   assert.ok(Math.abs(bounds.minY - 36) < 1e-6, 'glazing starts at the sill');
-  assert.ok(Math.abs(bounds.maxY - 60) < 1e-6, 'glazing stops at the head');
+  assert.ok(Math.abs(bounds.maxY - 84) < 1e-6, 'glazing stops at sill plus unit height');
+});
+
+test('opening height is the unit height, and the head follows the sill', () => {
+  // A door and window schedule lists the size of the unit; the head elevation
+  // is derived. Reading `height` as an absolute head made default windows 12"
+  // tall, which is the bug this pins down.
+  const project = createProject({});
+  const page = activePage(project);
+  const wall = makeWall({ x: 0, y: 0 }, { x: 120, y: 0 }, 'walls', 6, 'new');
+  page.entities.push(wall);
+  const window = makeOpening(wall.id, 0.5, 'openings', 'window', 36, {});
+  page.entities.push(window);
+
+  assert.equal(openingUnitHeight(window), 48, 'a default window is 4 ft tall');
+  assert.equal(openingSill(window), 36);
+  assert.equal(openingHead(window), 84, 'head sits at sill plus unit height');
+
+  const glass = buildModel(project, page, { includeRoof: false }).meshes.find(
+    (m) => m.material === 'glass'
+  );
+  const bounds = meshBounds([glass]);
+  assert.equal(bounds.maxY - bounds.minY, 48, 'the glazing is as tall as the unit');
+});
+
+test('a door sits on the floor, so its head equals its height', () => {
+  const door = { kind: 'door', height: 80, sill: 0 };
+  assert.equal(openingSill(door), 0);
+  assert.equal(openingHead(door), 80);
+});
+
+test('an opening taller than the wall is clamped rather than poking through', () => {
+  const project = createProject({});
+  project.wallHeight = 96;
+  const page = activePage(project);
+  const wall = makeWall({ x: 0, y: 0 }, { x: 200, y: 0 }, 'walls', 6, 'new');
+  page.entities.push(wall, makeOpening(wall.id, 0.5, 'openings', 'window', 36, { sill: 60, height: 60 }));
+  const model = buildModel(project, page, { includeRoof: false });
+  assert.ok(model.bounds.maxY <= 96 + 1e-9);
 });
 
 test('rooms become floor slabs below zero', () => {

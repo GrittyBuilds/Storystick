@@ -2,6 +2,7 @@
 // Zero-dependency static file server for Storystick.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
+import { gzipSync } from 'node:zlib';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,10 +48,23 @@ const server = createServer(async (req, res) => {
   }
   try {
     const body = await readFile(target);
-    res.writeHead(200, {
-      'Content-Type': TYPES[extname(target).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
-    });
+    const type = TYPES[extname(target).toLowerCase()] || 'application/octet-stream';
+    const headers = { 'Content-Type': type, 'Cache-Control': 'no-cache' };
+
+    // The self-hosted fonts are most of the payload and compress to well under
+    // half; text assets are worth compressing too.
+    const compressible = /^(text\/|application\/(json|manifest|javascript)|image\/svg|font\/ttf)/.test(type);
+    const accepts = String(req.headers['accept-encoding'] || '').includes('gzip');
+    if (compressible && accepts && body.length > 1024) {
+      const packed = gzipSync(body);
+      headers['Content-Encoding'] = 'gzip';
+      headers.Vary = 'Accept-Encoding';
+      res.writeHead(200, headers);
+      res.end(packed);
+      return;
+    }
+
+    res.writeHead(200, headers);
     res.end(body);
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });

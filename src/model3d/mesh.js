@@ -45,9 +45,11 @@ export class MeshBuilder {
 
   merge(other) {
     const offset = this.vertexCount;
-    this.positions.push(...other.positions);
-    this.normals.push(...other.normals);
-    for (const i of other.indices) this.indices.push(i + offset);
+    // Element-wise, not spread: `push(...array)` passes every element as an
+    // argument and overflows the call stack on a large mesh.
+    for (let i = 0; i < other.positions.length; i += 1) this.positions.push(other.positions[i]);
+    for (let i = 0; i < other.normals.length; i += 1) this.normals.push(other.normals[i]);
+    for (let i = 0; i < other.indices.length; i += 1) this.indices.push(other.indices[i] + offset);
     return this;
   }
 
@@ -108,11 +110,13 @@ export function extrudePolygon(builder, points, bottom, top, opts = {}) {
       const len = Math.hypot(dx, dz);
       if (len < 1e-9) continue;
       const n = [dz / len, 0, -dx / len];
+      // Wound so the right-hand rule agrees with `n`: winding and normal must
+      // point the same way or backface culling removes the face you can see.
       builder.quad(
         [p.x, bottom, p.y],
-        [q.x, bottom, q.y],
-        [q.x, top, q.y],
         [p.x, top, p.y],
+        [q.x, top, q.y],
+        [q.x, bottom, q.y],
         n
       );
     }

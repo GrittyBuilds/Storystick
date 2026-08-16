@@ -10,7 +10,13 @@
 // construction document — it is a way to see what you have drawn.
 
 import * as g from '../core/geometry.js';
-import { wallSpans, wallLength, openingsForWall } from '../core/entities.js';
+import {
+  wallSpans,
+  wallLength,
+  openingsForWall,
+  openingSill,
+  openingHead,
+} from '../core/entities.js';
 import { MeshBuilder, extrudePolygon, boxFromRect, meshBounds, boundsValid } from './mesh.js';
 
 export const MATERIALS = {
@@ -60,21 +66,53 @@ function wallMaterial(status) {
 }
 
 /** Plan-space quad for a slice of a wall, as {x,y} points. */
-function wallSlice(wall, from, to) {
+function wallSlice(wall, from, to, extend = { start: 0, end: 0 }) {
   const total = wallLength(wall) || 1;
-  return g.thickSegmentQuad(wall.a, wall.b, wall.thickness, from / total, to / total);
+  const stretched = total + extend.start + extend.end;
+  const a = g.add(wall.a, g.mul(g.norm(g.sub(wall.a, wall.b)), extend.start));
+  const b = g.add(wall.b, g.mul(g.norm(g.sub(wall.b, wall.a)), extend.end));
+  return g.thickSegmentQuad(a, b, wall.thickness, (from + extend.start) / stretched, (to + extend.start) / stretched);
 }
 
-function addWall(scene, wall, page, opts) {
+/**
+ * How far each end of a wall should run past its own endpoint so the outside of
+ * a corner is filled in. Each wall box stops at its centreline endpoint, which
+ * leaves a notch of half the neighbour's thickness at every corner; extending
+ * into the neighbour closes it. Only the full-height end spans are extended —
+ * an opening near the end must not grow with it.
+ */
+function cornerExtensions(wall, walls) {
+  const tol = 1e-6;
+  const reach = (point) => {
+    let best = 0;
+    for (const other of walls) {
+      if (other === wall) continue;
+      const near = g.dist(other.a, point) < tol + 0.5 || g.dist(other.b, point) < tol + 0.5;
+      if (near) best = Math.max(best, other.thickness / 2);
+    }
+    return best;
+  };
+  return { start: reach(wall.a), end: reach(wall.b) };
+}
+
+function addWall(scene, wall, page, opts, neighbours = []) {
   const total = wallLength(wall);
   if (total < 1e-6) return { openings: 0 };
   const material = wallMaterial(wall.status);
   const builder = scene.for(material);
   const height = opts.wallHeight;
+  const corners = opts.mitreCorners === false ? { start: 0, end: 0 } : cornerExtensions(wall, neighbours);
 
-  // Full-height sections between the openings.
-  for (const [from, to] of wallSpans(wall, page)) {
-    extrudePolygon(builder, wallSlice(wall, from, to), 0, height);
+  // Full-height sections between the openings; the first and last also fill in
+  // the corner where they meet another wall.
+  const spans = wallSpans(wall, page);
+  for (let i = 0; i < spans.length; i += 1) {
+    const [from, to] = spans[i];
+    const extend = {
+      start: from < 1e-6 ? corners.start : 0,
+      end: to > total - 1e-6 ? corners.end : 0,
+    };
+    extrudePolygon(builder, wallSlice(wall, from, to, extend), 0, height);
   }
 
   // Headers above every opening, sills below every window.
@@ -86,8 +124,9 @@ function addWall(scene, wall, page, opts) {
     if (to <= from) continue;
     const quad = wallSlice(wall, from, to);
 
-    const head = Math.min(height, opening.height ?? (opening.kind === 'window' ? 48 : 80));
-    const sill = opening.kind === 'window' ? Math.max(0, opening.sill ?? 36) : 0;
+    // `height` is the unit height; the head sits that far above the sill.
+    const sill = Math.max(0, openingSill(opening));
+    const head = Math.min(height, openingHead(opening));
 
     if (head < height) extrudePolygon(builder, quad, head, height);
     if (sill > 0) extrudePolygon(builder, quad, 0, Math.min(sill, head));
@@ -278,13 +317,12 @@ export function buildModel(project, page, options = {}) {
   });
   const visiblePage = { ...page, entities: visible };
 
-  let walls = 0;
+  const wallEntities = visible.filter((e) => e.type === 'wall');
   let openings = 0;
-  for (const ent of visible) {
-    if (ent.type !== 'wall') continue;
-    walls += 1;
-    openings += addWall(scene, ent, visiblePage, opts).openings;
+  for (const ent of wallEntities) {
+    openings += addWall(scene, ent, visiblePage, opts, wallEntities).openings;
   }
+  const walls = wallEntities.length;
 
   const floorArea = addRoomSlabs(scene, visiblePage, opts);
   const parts = opts.includeParts ? addParts(scene, visiblePage) : 0;

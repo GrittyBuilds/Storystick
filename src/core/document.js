@@ -2,6 +2,8 @@
 
 import { uid } from './entities.js';
 import { defaultGrid } from './units.js';
+import { createJurisdiction } from '../codes/jurisdiction.js';
+import { createSpeciesTable } from '../engineering/species.js';
 
 export const FILE_VERSION = 2;
 
@@ -63,6 +65,10 @@ export function createProject(options = {}) {
     defaultWallThickness: unitSystem === 'metric' ? 3.937 : 5.5,
     wallHeight: unitSystem === 'metric' ? 94.488 : 96,
     studSpacing: 16,
+    // Code requirements and lumber design values are per project, because they
+    // are jurisdiction- and material-specific and must be confirmed by the user.
+    jurisdiction: createJurisdiction(),
+    speciesValues: createSpeciesTable(),
     layers: DEFAULT_LAYERS.map((l) => ({ ...l, visible: true, locked: false })),
     materials: DEFAULT_MATERIALS.map((m) => ({ ...m })),
     pages,
@@ -218,7 +224,10 @@ function sanitizeEntity(raw, layerIds) {
     ent.material = String(ent.material ?? 'ply-3/4');
   }
   if (ent.type === 'dim') ent.offset = Number.isFinite(ent.offset) ? ent.offset : 18;
-  if (ent.type === 'room') ent.name = String(ent.name ?? 'Room');
+  if (ent.type === 'room') {
+    ent.name = String(ent.name ?? 'Room');
+    ent.use = typeof ent.use === 'string' ? ent.use : 'other';
+  }
   return ent;
 }
 
@@ -245,6 +254,38 @@ export function normalizeProject(raw) {
   }
   if (typeof raw.kind === 'string') project.kind = raw.kind;
   if (raw.meta && typeof raw.meta === 'object') project.meta = { ...base.meta, ...raw.meta };
+
+  // Confirmed code values and design values survive a round trip, but only the
+  // fields we know about — an imported file cannot introduce new thresholds.
+  if (raw.jurisdiction && typeof raw.jurisdiction === 'object') {
+    for (const key of ['authorities', 'edition', 'groundSnow']) {
+      if (raw.jurisdiction[key] && typeof raw.jurisdiction[key] === 'object') {
+        project.jurisdiction[key] = { ...project.jurisdiction[key], ...raw.jurisdiction[key] };
+      }
+    }
+    const incoming = raw.jurisdiction.thresholds || {};
+    for (const [id, record] of Object.entries(project.jurisdiction.thresholds)) {
+      const from = incoming[id];
+      if (from && typeof from === 'object' && Number.isFinite(from.value)) {
+        record.value = from.value;
+        record.source = typeof from.source === 'string' ? from.source : null;
+        record.confirmedBy = typeof from.confirmedBy === 'string' ? from.confirmedBy : null;
+        record.confirmedOn = typeof from.confirmedOn === 'string' ? from.confirmedOn : null;
+      }
+    }
+  }
+  if (raw.speciesValues && typeof raw.speciesValues === 'object') {
+    for (const [id, record] of Object.entries(project.speciesValues)) {
+      const from = raw.speciesValues[id];
+      if (!from || typeof from !== 'object') continue;
+      for (const key of ['fb', 'fv', 'fcPerp', 'e']) {
+        if (Number.isFinite(from[key]) && from[key] > 0) record[key] = from[key];
+      }
+      if (typeof from.source === 'string') record.source = from.source;
+      if (typeof from.confirmedOn === 'string') record.confirmedOn = from.confirmedOn;
+      record.verified = !!from.verified;
+    }
+  }
 
   // Files written before version 2 stored line weights as arbitrary screen
   // pixels; version 2 stores plotted millimetres from the brand weight table.

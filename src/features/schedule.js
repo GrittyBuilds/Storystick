@@ -2,7 +2,7 @@
 // sit on the drawing sheet next to the plan.
 
 import * as g from '../core/geometry.js';
-import { wallLength, openingsForWall } from '../core/entities.js';
+import { wallLength, openingsForWall, openingHead, openingUnitHeight, openingSill } from '../core/entities.js';
 
 export function openingSchedule(project, kind) {
   const rows = [];
@@ -18,8 +18,9 @@ export function openingSchedule(project, kind) {
         page: page.name,
         kind: ent.kind,
         width: ent.width,
-        height: ent.height ?? (ent.kind === 'window' ? 48 : 80),
-        sill: ent.sill ?? 0,
+        height: openingUnitHeight(ent),
+        sill: openingSill(ent),
+        headHeight: openingHead(ent),
         swing: ent.swing || '',
         wallThickness: wall ? wall.thickness : 0,
       });
@@ -74,7 +75,7 @@ export function wallTakeoff(project) {
       if (length <= 0) continue;
       const openings = openingsForWall(page, ent.id);
       const openingArea = openings.reduce(
-        (sum, o) => sum + o.width * Math.min(height, o.height ?? (o.kind === 'window' ? 48 : 80)),
+        (sum, o) => sum + o.width * Math.max(0, Math.min(height, openingHead(o)) - openingSill(o)),
         0
       );
       const status = ent.status || 'new';

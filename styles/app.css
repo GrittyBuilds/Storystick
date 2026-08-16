@@ -1351,6 +1351,120 @@ body[data-mode='paper'] .status-message.is-error {
   background: var(--ss-vellum);
 }
 
+/* --- findings ---------------------------------------------------------- */
+
+.finding-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ss-space-8);
+}
+
+.finding {
+  border: 1px solid var(--ss-mist);
+  border-left-width: 4px;
+  border-radius: var(--r);
+  padding: var(--ss-space-12) var(--ss-space-16);
+  background: var(--ss-paper);
+}
+
+.finding.fail {
+  border-left-color: var(--ss-red-deep);
+  background: #fbeded;
+}
+
+.finding.review {
+  border-left-color: var(--ss-cedar-deep);
+  background: #fcf1e4;
+}
+
+.finding.pass {
+  border-left-color: var(--ss-green-deep);
+}
+
+.finding-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ss-space-8);
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.finding-head strong {
+  font-family: var(--brand);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ss-blueprint);
+}
+
+.finding-message {
+  margin: 0 0 6px;
+  font-size: 13.5px;
+  color: var(--ss-graphite);
+}
+
+.finding-values {
+  display: flex;
+  gap: var(--ss-space-16);
+  flex-wrap: wrap;
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--ss-slate);
+}
+
+.finding-fix {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ss-blueprint);
+  font-weight: 500;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--ss-mist);
+  color: var(--ss-graphite);
+  white-space: nowrap;
+}
+
+.chip .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.chip.red {
+  background: #fbe4e4;
+  color: var(--ss-red-deep);
+}
+
+.chip.cedar {
+  background: #fbeee0;
+  color: var(--ss-cedar-deep);
+}
+
+.chip.green {
+  background: #dff1e9;
+  color: var(--ss-green-deep);
+}
+
+.assumptions {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--ss-graphite);
+}
+
+.assumptions li {
+  margin-bottom: 4px;
+}
+
 /* --- mobile shell ------------------------------------------------------ */
 
 .menu-btn {

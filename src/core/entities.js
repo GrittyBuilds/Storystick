@@ -49,6 +49,12 @@ export function makeWall(a, b, layer, thickness = 5.5, status = 'new') {
   return { id: uid('wl'), type: 'wall', layer, a: g.clone(a), b: g.clone(b), thickness, status };
 }
 
+/**
+ * `height` is the UNIT height — the size a door or window schedule lists, e.g.
+ * a 3'0" x 5'0" window. The elevation of its head above the floor is derived as
+ * sill + height (see `openingHead`). Doors sit on the floor, so for them the two
+ * are the same number.
+ */
 export function makeOpening(hostId, t, layer, kind = 'door', width = 32, opts = {}) {
   return {
     id: uid('op'),
@@ -65,6 +71,21 @@ export function makeOpening(hostId, t, layer, kind = 'door', width = 32, opts = 
   };
 }
 
+/** Height of the opening itself, in inches. */
+export function openingUnitHeight(opening) {
+  return opening.height ?? (opening.kind === 'window' ? 48 : 80);
+}
+
+/** Sill elevation above the floor. Doors sit on it. */
+export function openingSill(opening) {
+  return opening.kind === 'window' ? opening.sill ?? 36 : 0;
+}
+
+/** Elevation of the top of the opening above the floor. */
+export function openingHead(opening) {
+  return openingSill(opening) + openingUnitHeight(opening);
+}
+
 export function makeDim(a, b, layer, offset = 18) {
   return { id: uid('dm'), type: 'dim', layer, a: g.clone(a), b: g.clone(b), offset };
 }
@@ -73,8 +94,22 @@ export function makeText(p, text, layer, size = 8) {
   return { id: uid('tx'), type: 'text', layer, p: g.clone(p), text, size, rot: 0 };
 }
 
-export function makeRoom(pts, layer, name = 'Room') {
-  return { id: uid('rm'), type: 'room', layer, pts: pts.map(g.clone), name };
+/** Room uses that code rules key off — bedrooms need escape openings, and so on. */
+export const ROOM_USES = [
+  'bedroom',
+  'living',
+  'kitchen',
+  'bathroom',
+  'hall',
+  'stair',
+  'storage',
+  'garage',
+  'basement',
+  'other',
+];
+
+export function makeRoom(pts, layer, name = 'Room', use = 'other') {
+  return { id: uid('rm'), type: 'room', layer, pts: pts.map(g.clone), name, use };
 }
 
 export function makePart(a, b, layer, opts = {}) {

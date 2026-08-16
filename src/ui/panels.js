@@ -2,7 +2,14 @@
 
 import { el, clear, field, select, numberInput, textInput } from './dom.js';
 import { formatLength, formatArea, parseLength } from '../core/units.js';
-import { WALL_STATUS, describe, wallLength, findEntity } from '../core/entities.js';
+import {
+  WALL_STATUS,
+  ROOM_USES,
+  describe,
+  wallLength,
+  findEntity,
+  openingHead,
+} from '../core/entities.js';
 import { layerColor } from '../render/theme.js';
 import * as g from '../core/geometry.js';
 
@@ -234,10 +241,14 @@ function entityEditor(app, ent) {
         }))
       );
       fields.push(
-        field('Head height', lengthInput(app, ent.height ?? 80, (v) => {
-          ent.height = v;
-          change('Change opening height');
-        }))
+        field(
+          'Height',
+          lengthInput(app, ent.height ?? 80, (v) => {
+            ent.height = v;
+            change('Change opening height');
+          }),
+          `Unit height · head at ${formatLength(openingHead(ent), app.project.unitSystem)}`
+        )
       );
       if (ent.kind === 'window') {
         fields.push(
@@ -342,6 +353,20 @@ function entityEditor(app, ent) {
 
     case 'room':
       fields.push(field('Name', textInput(ent.name, (v) => { ent.name = v || 'Room'; change('Rename room'); })));
+      fields.push(
+        field(
+          'Use',
+          select(
+            ROOM_USES.map((u) => ({ value: u, label: u.charAt(0).toUpperCase() + u.slice(1) })),
+            ent.use || 'other',
+            (v) => {
+              ent.use = v;
+              change('Change room use');
+            }
+          ),
+          'Code checks key off this'
+        )
+      );
       break;
 
     case 'text':

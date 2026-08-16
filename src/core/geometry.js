@@ -225,6 +225,50 @@ export function subtractIntervals(length, intervals) {
   return spans;
 }
 
+/** Convex hull by Andrew's monotone chain, counter-clockwise in y-down space. */
+export function convexHull(points) {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (pts.length < 3) return pts;
+  const half = (input) => {
+    const out = [];
+    for (const p of input) {
+      while (out.length >= 2 && cross(sub(out[out.length - 1], out[out.length - 2]), sub(p, out[out.length - 2])) <= 0) {
+        out.pop();
+      }
+      out.push(p);
+    }
+    out.pop();
+    return out;
+  };
+  return [...half(pts), ...half([...pts].reverse())];
+}
+
+/**
+ * Narrowest width of a polygon, by rotating calipers over its convex hull.
+ * This is the "minimum horizontal dimension" a room actually has — the bounding
+ * box overstates it for anything that is not a rectangle.
+ */
+export function minimumWidth(points) {
+  const hull = convexHull(points);
+  if (hull.length < 2) return 0;
+  if (hull.length === 2) return 0;
+  let best = Infinity;
+  for (let i = 0; i < hull.length; i += 1) {
+    const a = hull[i];
+    const b = hull[(i + 1) % hull.length];
+    const edge = sub(b, a);
+    const length = len(edge);
+    if (length < EPS) continue;
+    let far = 0;
+    for (const p of hull) {
+      const distance = Math.abs(cross(edge, sub(p, a))) / length;
+      if (distance > far) far = distance;
+    }
+    if (far < best) best = far;
+  }
+  return Number.isFinite(best) ? best : 0;
+}
+
 export function roundTo(value, step) {
   if (!step) return value;
   return Math.round(value / step) * step;

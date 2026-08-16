@@ -51,6 +51,7 @@ import {
   helpDialog,
   menuDialog,
 } from './ui/dialogs.js';
+import { codeCheckDialog, codeSettingsDialog, structuralDialog } from './ui/reports.js';
 import { downloadText } from './ui/dom.js';
 
 const AUTOSAVE_MS = 1200;
@@ -77,6 +78,17 @@ export class App {
 
     this.activeSheet = null;
     this.installAvailable = false;
+    this.structural = {
+      member: 'floor',
+      speciesId: 'spf-2',
+      size: '2x10',
+      plies: 1,
+      spacing: 16,
+      span: 144,
+      livePsf: 40,
+      deadPsf: 10,
+      deflectionLimit: 'floorLive',
+    };
     this.canvas3d = document.getElementById('canvas3d');
     this.viewMode = '2d';
     this.viewer = null;
@@ -536,6 +548,8 @@ export class App {
       cutlist: () => cutListDialog(this),
       schedules: () => scheduleDialog(this),
       estimate: () => estimateDialog(this),
+      codecheck: () => codeCheckDialog(this),
+      structural: () => structuralDialog(this),
       settings: () => settingsDialog(this),
       help: () => helpDialog(),
     };
@@ -566,6 +580,23 @@ export class App {
     const outcome = await promptInstall();
     if (outcome === 'accepted') this.setStatus('Installing Storystick…');
     else this.setInstallAvailable(false);
+  }
+
+  /** Jump to and select whatever a finding is about. */
+  revealEntity(id) {
+    for (const page of this.project.pages) {
+      if (!page.entities.some((e) => e.id === id)) continue;
+      if (page.id !== this.project.activePageId) {
+        this.project.activePageId = page.id;
+        this.refreshAll();
+      }
+      this.setViewMode('2d');
+      this.setSelection([id]);
+      this.zoomSelection();
+      return true;
+    }
+    this.setStatus('That item is no longer in the drawing.', true);
+    return false;
   }
 
   // --- mobile sheets ----------------------------------------------------
@@ -618,6 +649,8 @@ export class App {
       ['Cut list', () => cutListDialog(this)],
       ['Schedules', () => scheduleDialog(this)],
       ['Estimate', () => estimateDialog(this)],
+      ['Code check', () => codeCheckDialog(this)],
+      ['Structural check', () => structuralDialog(this)],
       ['Export…', () => exportDialog(this)],
       ['Settings', () => settingsDialog(this)],
       ['Undo', () => this.undo()],
@@ -1150,6 +1183,8 @@ export class App {
     on('btn-cutlist', () => cutListDialog(this));
     on('btn-schedules', () => scheduleDialog(this));
     on('btn-estimate', () => estimateDialog(this));
+    on('btn-codecheck', () => codeCheckDialog(this));
+    on('btn-structural', () => structuralDialog(this));
     on('btn-help', () => helpDialog());
     on('btn-undo', () => this.undo());
     on('btn-redo', () => this.redo());

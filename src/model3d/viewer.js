@@ -379,7 +379,6 @@ export class Viewer3D {
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
     canvas.addEventListener('pointercancel', onUp);
-    canvas.addEventListener('pointerleave', onUp);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('contextmenu', onContext);
 
@@ -388,7 +387,6 @@ export class Viewer3D {
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointercancel', onUp);
-      canvas.removeEventListener('pointerleave', onUp);
       canvas.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('contextmenu', onContext);
     };
@@ -411,8 +409,9 @@ export class Viewer3D {
     this.dirty = true;
   }
 
+  /** Coalesce redraws, and skip entirely when nothing has changed. */
   requestFrame() {
-    if (this.frameHandle) return;
+    if (this.frameHandle || !this.dirty) return;
     this.frameHandle = requestAnimationFrame(() => {
       this.frameHandle = 0;
       this.render();
@@ -441,7 +440,9 @@ export class Viewer3D {
     m4.lookAt(eye, this.camera.target, [0, 1, 0], this.view);
     m4.perspective(FOV, aspect, Math.max(radius * 0.002, 0.5), this.camera.distance + radius * 12, this.projection);
 
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    // gl.drawingBuffer* is the size actually allocated, which the driver may cap
+    // below canvas.width/height on a large display.
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(pal.background[0], pal.background[1], pal.background[2], 1);
     gl.clearDepth(1);
     gl.enable(gl.DEPTH_TEST);
