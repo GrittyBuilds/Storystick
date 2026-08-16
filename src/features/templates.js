@@ -84,10 +84,10 @@ function shed() {
     makeOpening(walls[0].id, 0.5, 'openings', 'door', 36, { tag: 'D1', height: 80, swing: 'left' })
   );
   plan.entities.push(
-    makeOpening(walls[1].id, 0.35, 'openings', 'window', 36, { tag: 'W1', sill: 36, height: 36 })
+    makeOpening(walls[1].id, 0.35, 'openings', 'window', 36, { tag: 'W1', sill: 36, height: 72 })
   );
   plan.entities.push(
-    makeOpening(walls[3].id, 0.5, 'openings', 'window', 36, { tag: 'W2', sill: 36, height: 36 })
+    makeOpening(walls[3].id, 0.5, 'openings', 'window', 36, { tag: 'W2', sill: 36, height: 72 })
   );
   plan.entities.push(
     makeRoom(

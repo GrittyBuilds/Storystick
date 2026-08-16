@@ -31,6 +31,8 @@ import {
   saveCanvasMode,
 } from './core/store.js';
 import { CANVAS_MODES } from './render/theme.js';
+import { buildModel } from './model3d/build.js';
+import { Viewer3D, isWebglAvailable } from './model3d/viewer.js';
 import { renderToolbar, renderToolOptions } from './ui/toolbar.js';
 import { renderLayers, renderPages, renderProperties } from './ui/panels.js';
 import {
@@ -70,6 +72,21 @@ export class App {
     this.canvasMode = loadCanvasMode();
     document.body.dataset.mode = this.canvasMode;
 
+    this.canvas3d = document.getElementById('canvas3d');
+    this.viewMode = '2d';
+    this.viewer = null;
+    this.modelStats = null;
+    this.showModelGrid = true;
+    this.model3d = {
+      roofStyle: 'gable',
+      roofPitch: 6,
+      roofOverhang: 12,
+      includeRoof: true,
+      includeFloors: true,
+      includeCeilings: false,
+      includeParts: true,
+    };
+
     this.defaults = {
       wall: { thickness: 5.5, status: 'new' },
       door: { width: 32, height: 80, swing: 'left' },
@@ -93,6 +110,10 @@ export class App {
 
     window.addEventListener('resize', () => {
       this.renderer.resize();
+      if (this.viewer) {
+        this.viewer.resize();
+        if (this.viewMode === '3d') this.viewer.render();
+      }
       this.render();
     });
 
@@ -178,6 +199,8 @@ export class App {
     this.history.commit(this.project, label);
     this.scheduleAutosave();
     this.refreshAll();
+    // Keep the 3D massing in step with the drawing, without re-framing the camera.
+    this.rebuildModel({ frame: false });
   }
 
   touch(label) {
@@ -374,6 +397,7 @@ export class App {
     this.hover = null;
     this.zoomFit();
     this.refreshAll();
+    this.rebuildModel({ frame: true });
   }
 
   openPageDialog() {
@@ -464,6 +488,10 @@ export class App {
   // --- rendering --------------------------------------------------------
 
   render() {
+    if (this.viewMode === '3d') {
+      if (this.viewer) this.viewer.requestFrame();
+      return;
+    }
     this.renderer.draw({
       project: this.project,
       page: this.page,
@@ -478,6 +506,96 @@ export class App {
     this.refreshCoords();
   }
 
+  // --- 3D view ----------------------------------------------------------
+
+  /**
+   * Switch between the 2D drafting canvas and the 3D massing view. The 3D
+   * viewer is created lazily so a browser without WebGL still runs the app.
+   */
+  setViewMode(mode) {
+    const next = mode === '3d' ? '3d' : '2d';
+    if (next === this.viewMode) return;
+
+    if (next === '3d' && !this.viewer) {
+      if (!isWebglAvailable()) {
+        this.setStatus('This browser cannot show the 3D view — WebGL is unavailable.', true);
+        return;
+      }
+      try {
+        this.viewer = new Viewer3D(this.canvas3d);
+        this.viewer.setMode(this.canvasMode);
+      } catch (err) {
+        this.setStatus(`3D view failed to start: ${err.message}`, true);
+        return;
+      }
+    }
+
+    this.viewMode = next;
+    const showing3d = next === '3d';
+    this.canvas.hidden = showing3d;
+    this.canvas3d.hidden = !showing3d;
+    const presets = document.getElementById('view-presets');
+    if (presets) presets.hidden = !showing3d;
+
+    if (showing3d) {
+      this.activeTool.reset();
+      this.viewer.resize();
+      this.rebuildModel({ frame: true });
+    }
+    this.refreshViewSwitch();
+    this.refreshAll();
+    this.setStatus(
+      showing3d
+        ? 'Drag to orbit · two fingers or right-drag to pan · scroll or pinch to zoom.'
+        : this.activeTool.hint()
+    );
+  }
+
+  /** Re-extrude the active sheet. Cheap enough to run on every edit. */
+  rebuildModel(opts = {}) {
+    if (!this.viewer || this.viewMode !== '3d') return;
+    const model = buildModel(this.project, this.page, this.model3d);
+    this.modelStats = model.stats;
+    this.viewer.setModel(model);
+    if (opts.frame !== false) this.viewer.frameAll();
+    this.viewer.render();
+    this.refreshToolOptions();
+  }
+
+  setModelGrid(on) {
+    this.showModelGrid = on;
+    if (this.viewer) {
+      this.viewer.showGrid = on;
+      this.viewer.render();
+    }
+  }
+
+  setModelView(name) {
+    if (!this.viewer) return;
+    if (name === 'fit') this.viewer.frameAll();
+    else this.viewer.setView(name);
+    this.viewer.render();
+  }
+
+  exportModelPng() {
+    if (!this.viewer) return;
+    const url = this.viewer.toDataUrl('image/png');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this.slug()}-${this.page.name.replace(/\s+/g, '-').toLowerCase()}-3d.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    this.setStatus('Saved the 3D view as a PNG.');
+  }
+
+  refreshViewSwitch() {
+    const two = document.getElementById('view-2d');
+    const three = document.getElementById('view-3d');
+    if (two) two.classList.toggle('on', this.viewMode === '2d');
+    if (three) three.classList.toggle('on', this.viewMode === '3d');
+  }
+
   /**
    * Blueprint is the working mode; Paper is for printing, sharing and a screen
    * in direct sun. Both are drawn on their own terms — see render/theme.js.
@@ -487,6 +605,7 @@ export class App {
     this.canvasMode = mode;
     document.body.dataset.mode = mode;
     saveCanvasMode(mode);
+    if (this.viewer) this.viewer.setMode(mode);
     this.refreshModeSwitch();
     this.refreshAll();
     this.setStatus(
@@ -765,7 +884,12 @@ export class App {
       }
 
       if (e.key === 'f' || e.key === 'F') {
-        this.zoomFit();
+        if (this.viewMode === '3d') this.setModelView('fit');
+        else this.zoomFit();
+        return;
+      }
+      if ((e.key === '2' || e.key === '3') && !this.activeTool.anchor) {
+        this.setViewMode(e.key === '3' ? '3d' : '2d');
         return;
       }
       if (e.key === '?') {
@@ -911,6 +1035,16 @@ export class App {
     on('toggle-ortho', () => this.toggleSetting('ortho'));
     on('mode-blueprint', () => this.setCanvasMode('blueprint'));
     on('mode-paper', () => this.setCanvasMode('paper'));
+    on('view-2d', () => this.setViewMode('2d'));
+    on('view-3d', () => this.setViewMode('3d'));
+    on('view-fit', () => this.setModelView('fit'));
+
+    const presets = document.getElementById('view-presets');
+    if (presets) {
+      for (const button of presets.querySelectorAll('[data-view]')) {
+        button.addEventListener('click', () => this.setModelView(button.dataset.view));
+      }
+    }
 
     const title = document.getElementById('project-name');
     if (title) {
@@ -943,6 +1077,7 @@ export class App {
 
     this.refreshToggles();
     this.refreshModeSwitch();
+    this.refreshViewSwitch();
 
     // Canvas text is measured, so redraw once the brand faces have loaded.
     if (document.fonts && document.fonts.ready) {

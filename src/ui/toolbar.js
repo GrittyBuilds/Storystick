@@ -48,7 +48,102 @@ function lengthControl(app, value, onCommit) {
   return input;
 }
 
+function checkbox(label, checked, onChange) {
+  const input = el('input', { type: 'checkbox', checked });
+  input.addEventListener('change', () => onChange(input.checked));
+  const node = el('label', { class: 'field inline-check' }, [input, el('span', { text: label })]);
+  return node;
+}
+
+/** The options strip while the 3D view is open. */
+export function renderModelOptions(app, container) {
+  clear(container);
+  const m = app.model3d;
+  const stats = app.modelStats;
+
+  container.appendChild(el('span', { class: 'options-title', text: '3D Model' }));
+
+  container.appendChild(
+    field(
+      'Roof',
+      select(
+        [
+          { value: 'gable', label: 'Gable' },
+          { value: 'hip', label: 'Hip' },
+          { value: 'flat', label: 'Flat' },
+          { value: 'none', label: 'None' },
+        ],
+        m.roofStyle,
+        (v) => {
+          m.roofStyle = v;
+          app.rebuildModel();
+        }
+      )
+    )
+  );
+
+  if (m.roofStyle === 'gable' || m.roofStyle === 'hip') {
+    container.appendChild(
+      field(
+        'Pitch',
+        numberInput(m.roofPitch, (v) => {
+          m.roofPitch = Math.max(0, Math.min(24, v));
+          app.rebuildModel();
+        }, { step: 1, min: 0, max: 24 }),
+        'in 12'
+      )
+    );
+    container.appendChild(
+      field('Overhang', lengthControl(app, m.roofOverhang, (v) => {
+        m.roofOverhang = v;
+        app.rebuildModel();
+      }))
+    );
+  }
+
+  container.appendChild(
+    field('Wall height', lengthControl(app, app.project.wallHeight, (v) => {
+      app.project.wallHeight = v;
+      app.touch('Change wall height');
+      app.rebuildModel();
+    }))
+  );
+
+  container.appendChild(
+    checkbox('Floors', m.includeFloors, (v) => {
+      m.includeFloors = v;
+      app.rebuildModel();
+    })
+  );
+  container.appendChild(
+    checkbox('Ceilings', m.includeCeilings, (v) => {
+      m.includeCeilings = v;
+      app.rebuildModel();
+    })
+  );
+  container.appendChild(
+    checkbox('Grid', app.showModelGrid, (v) => {
+      app.setModelGrid(v);
+    })
+  );
+
+  container.appendChild(
+    el('button', { class: 'btn tiny', text: 'Save PNG', onclick: () => app.exportModelPng() })
+  );
+
+  if (stats) {
+    const summary = stats.empty
+      ? 'Nothing on this sheet to build — draw walls, rooms or parts.'
+      : `${stats.walls} walls · ${stats.openings} openings · ${stats.parts} parts · ${stats.triangles.toLocaleString()} triangles`;
+    container.appendChild(el('span', { class: 'options-hint', text: summary }));
+  }
+}
+
 export function renderToolOptions(app, container) {
+  if (app.viewMode === '3d') {
+    renderModelOptions(app, container);
+    return;
+  }
   clear(container);
   const id = app.activeTool.constructor.id;
   const d = app.defaults;

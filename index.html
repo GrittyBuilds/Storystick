@@ -55,9 +55,23 @@
 
       <section class="canvas-wrap">
         <canvas id="canvas" tabindex="0"></canvas>
+        <canvas id="canvas3d" hidden></canvas>
+        <div class="view-switch" role="group" aria-label="View">
+          <button id="view-2d" type="button" class="on">2D Plan</button>
+          <button id="view-3d" type="button">3D</button>
+        </div>
         <div class="mode-switch" role="group" aria-label="Canvas mode">
           <button id="mode-blueprint" type="button">Blueprint</button>
           <button id="mode-paper" type="button">Paper</button>
+        </div>
+        <div id="view-presets" class="view-presets" hidden>
+          <button type="button" data-view="iso">Iso</button>
+          <button type="button" data-view="top">Top</button>
+          <button type="button" data-view="front">Front</button>
+          <button type="button" data-view="back">Back</button>
+          <button type="button" data-view="left">Left</button>
+          <button type="button" data-view="right">Right</button>
+          <button type="button" id="view-fit">Fit</button>
         </div>
         <div class="view-controls">
           <button id="btn-zoom-in" class="icon-btn" title="Zoom in">+</button>
