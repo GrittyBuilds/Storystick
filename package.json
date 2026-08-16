@@ -1,0 +1,30 @@
+{
+  "name": "storystick",
+  "version": "1.0.0",
+  "description": "Storystick — design blueprints and plans for structures, buildings, renovations and woodworking projects.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --test \"test/*.test.js\"",
+    "smoke": "node test/smoke.browser.mjs"
+  },
+  "keywords": [
+    "cad",
+    "blueprint",
+    "floor-plan",
+    "woodworking",
+    "cut-list",
+    "drafting",
+    "renovation"
+  ],
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

@@ -1,0 +1,217 @@
+// End-to-end smoke test: boots the static server, drives the real UI in
+// Chromium and asserts the drawing, reporting and persistence paths.
+//
+//   npm run smoke
+//
+// Requires the optional `playwright` dev dependency and a Chromium binary.
+
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+
+const PORT = process.env.SMOKE_PORT || '4199';
+const BASE = `http://127.0.0.1:${PORT}`;
+const EXECUTABLE = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium';
+
+const server = spawn(process.execPath, ['server.js'], {
+  env: { ...process.env, PORT, HOST: '127.0.0.1' },
+  stdio: 'ignore',
+});
+
+const checks = [];
+const check = (name, fn) => {
+  try {
+    fn();
+    checks.push(`  ok  ${name}`);
+  } catch (err) {
+    checks.push(`FAIL  ${name}: ${err.message}`);
+    process.exitCode = 1;
+  }
+};
+
+let browser;
+try {
+  await sleep(600);
+  browser = await chromium.launch({ executablePath: EXECUTABLE });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+
+  const errors = [];
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.goto(BASE, { waitUntil: 'networkidle' });
+  await sleep(300);
+
+  const toolCount = await page.locator('.tool-btn').count();
+  check('the tool palette renders every tool', () => assert.equal(toolCount, 14));
+
+  const loadTemplate = async (label) => {
+    await page.click('#btn-new');
+    await page.click(`button.card:has-text("${label}")`);
+    await sleep(350);
+  };
+
+  // --- building flow ------------------------------------------------------
+  await loadTemplate('12 × 16 storage shed');
+  const shed = await page.evaluate(() => ({
+    name: window.storystick.project.name,
+    pages: window.storystick.project.pages.length,
+    walls: window.storystick.page.entities.filter((e) => e.type === 'wall').length,
+  }));
+  check('a template loads its sheets and walls', () => {
+    assert.equal(shed.pages, 2);
+    assert.equal(shed.walls, 4);
+  });
+
+  const box = await page.locator('#canvas').boundingBox();
+
+  // Draw a wall by clicking two points.
+  await page.keyboard.press('w');
+  await page.mouse.click(box.x + 200, box.y + 620);
+  await page.mouse.move(box.x + 480, box.y + 620);
+  await page.mouse.click(box.x + 480, box.y + 620);
+  await page.keyboard.press('Escape');
+  await sleep(150);
+  const wallsDrawn = await page.evaluate(
+    () => window.storystick.page.entities.filter((e) => e.type === 'wall').length
+  );
+  check('the wall tool creates a wall from two clicks', () => assert.equal(wallsDrawn, 5));
+
+  // Typed exact length.
+  await page.keyboard.press('l');
+  await page.mouse.click(box.x + 200, box.y + 300);
+  await page.mouse.move(box.x + 400, box.y + 300);
+  await page.fill('#command-input', "6'-6\"");
+  await page.press('#command-input', 'Enter');
+  await sleep(150);
+  const lineLength = await page.evaluate(() => {
+    const line = window.storystick.page.entities.filter((e) => e.type === 'line').pop();
+    return Math.hypot(line.b.x - line.a.x, line.b.y - line.a.y);
+  });
+  check('typing a length draws it exactly', () => assert.equal(lineLength, 78));
+
+  // Undo / redo.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('v');
+  const before = await page.evaluate(() => window.storystick.page.entities.length);
+  await page.keyboard.press('Control+z');
+  const undone = await page.evaluate(() => window.storystick.page.entities.length);
+  await page.keyboard.press('Control+Shift+z');
+  const redone = await page.evaluate(() => window.storystick.page.entities.length);
+  check('undo and redo move the document', () => {
+    assert.equal(undone, before - 1);
+    assert.equal(redone, before);
+  });
+
+  // Select all populates the properties panel.
+  await page.keyboard.press('Control+a');
+  await sleep(150);
+  const selected = await page.evaluate(() => window.storystick.selection.size);
+  check('select all picks up the drawing', () => assert.ok(selected >= shed.walls));
+  await page.keyboard.press('Escape');
+
+  // --- reports ------------------------------------------------------------
+  await page.click('#btn-cutlist');
+  await sleep(300);
+  const layouts = await page.locator('.modal svg.layout').count();
+  check('the cut list draws stock layouts', () => assert.ok(layouts > 0));
+  await page.keyboard.press('Escape');
+
+  await page.click('#btn-schedules');
+  await sleep(250);
+  const scheduleRows = await page.locator('.modal .data-table tbody tr').count();
+  check('the schedules dialog lists rooms and openings', () => assert.ok(scheduleRows > 0));
+  await page.keyboard.press('Escape');
+
+  await page.click('#btn-estimate');
+  await sleep(250);
+  const total = await page.locator('.modal .totals .grand strong').innerText();
+  check('the estimate shows a grand total', () => assert.match(total, /^\$[\d,]+\.\d\d$/));
+  await page.keyboard.press('Escape');
+
+  // --- renovation flow ----------------------------------------------------
+  await loadTemplate('Kitchen renovation');
+  const reno = await page.evaluate(() => {
+    const ents = window.storystick.page.entities;
+    return {
+      demo: ents.filter((e) => e.type === 'wall' && e.status === 'demo').length,
+      existing: ents.filter((e) => e.type === 'wall' && e.status === 'existing').length,
+      rooms: ents.filter((e) => e.type === 'room').length,
+    };
+  });
+  check('the renovation template separates demo, existing and new work', () => {
+    assert.equal(reno.demo, 1);
+    assert.equal(reno.existing, 4);
+    assert.equal(reno.rooms, 2);
+  });
+
+  // Drop a door onto a wall.
+  const doorsBefore = await page.evaluate(
+    () => window.storystick.page.entities.filter((e) => e.type === 'opening').length
+  );
+  await page.keyboard.press('d');
+  await page.mouse.move(box.x + box.width / 2, box.y + 120);
+  await sleep(120);
+  await page.mouse.click(box.x + box.width / 2, box.y + 120);
+  await sleep(200);
+  const doorsAfter = await page.evaluate(
+    () => window.storystick.page.entities.filter((e) => e.type === 'opening').length
+  );
+  check('clicking a wall with the door tool hosts a door on it', () =>
+    assert.equal(doorsAfter, doorsBefore + 1)
+  );
+
+  // --- woodworking flow ---------------------------------------------------
+  await loadTemplate('Bookshelf 36 × 72');
+  await page.click('.page-item:has-text("Part Layout")');
+  await sleep(300);
+  await page.keyboard.press('k');
+  await page.mouse.click(box.x + 250, box.y + 560);
+  await page.mouse.move(box.x + 360, box.y + 610);
+  await page.fill('#command-input', '24 x 12');
+  await page.press('#command-input', 'Enter');
+  await sleep(200);
+  const part = await page.evaluate(() => {
+    const last = window.storystick.page.entities.filter((e) => e.type === 'part').pop();
+    return { w: Math.abs(last.b.x - last.a.x), h: Math.abs(last.b.y - last.a.y) };
+  });
+  check('the part tool honours typed width × length', () => {
+    assert.equal(part.w, 24);
+    assert.equal(part.h, 12);
+  });
+
+  // --- export + persistence ----------------------------------------------
+  const svg = await page.evaluate(async () => {
+    const mod = await import('/src/features/export.js');
+    const app = window.storystick;
+    return mod.pageToSvg(app.project, app.page);
+  });
+  check('SVG export is well formed', () => {
+    assert.ok(svg.startsWith('<?xml'));
+    assert.ok(svg.trim().endsWith('</svg>'));
+    assert.ok(!/NaN/.test(svg));
+  });
+
+  const persisted = await page.evaluate(async () => {
+    const store = await import('/src/core/store.js');
+    const app = window.storystick;
+    app.project.name = 'Persisted';
+    store.saveProject(app.project);
+    const back = store.loadProject(app.project.id);
+    return back && { name: back.name, entities: back.pages.reduce((n, p) => n + p.entities.length, 0) };
+  });
+  check('projects survive a save/load round trip', () => {
+    assert.ok(persisted);
+    assert.equal(persisted.name, 'Persisted');
+    assert.ok(persisted.entities > 0);
+  });
+
+  check('no console or page errors were raised', () => assert.deepEqual(errors, []));
+} finally {
+  if (browser) await browser.close();
+  server.kill();
+}
+
+console.log(checks.join('\n'));
+console.log(process.exitCode ? '\nsmoke test FAILED' : `\nsmoke test passed (${checks.length} checks)`);
