@@ -268,11 +268,19 @@ export function roofRidgeHeight(plane) {
   return plane.pts.reduce((max, p) => Math.max(max, roofHeightAt(plane, p)), plane.eaveHeight);
 }
 
-/** Sloped area of a roof plane, which is what you buy shingles by. */
-export function roofPlaneArea(plane) {
-  const flat = Math.abs(g.polygonArea(plane.pts));
+/** Footprint of a roof plane, as it covers the ground. */
+export function roofPlanArea(plane) {
+  return Math.abs(g.polygonArea(plane.pts));
+}
+
+/**
+ * Surface area of a roof plane, which is what you buy shingles by. Named for
+ * the slope on purpose: the plan area and the sloped area differ by the pitch,
+ * and a takeoff that confuses them under-orders the roof.
+ */
+export function roofSlopedArea(plane) {
   const pitch = plane.pitch || 0;
-  return flat * Math.sqrt(1 + (pitch / 12) ** 2);
+  return roofPlanArea(plane) * Math.sqrt(1 + (pitch / 12) ** 2);
 }
 
 export function footingLength(footing) {

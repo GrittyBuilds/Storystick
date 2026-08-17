@@ -43,8 +43,16 @@ try {
   await page.goto(BASE, { waitUntil: 'networkidle' });
   await sleep(300);
 
+  // Compared against the tool registry rather than a hard-coded count, so
+  // adding a tool does not fail this test for the wrong reason.
+  const { TOOL_ENTRIES } = await import('../src/tools/index.js');
   const toolCount = await page.locator('.tool-btn').count();
-  check('the tool palette renders every tool', () => assert.equal(toolCount, 14));
+  check('the tool palette renders every tool', () =>
+    assert.equal(toolCount, TOOL_ENTRIES.length));
+
+  const shortcuts = TOOL_ENTRIES.map((t) => t.key);
+  check('no two tools claim the same shortcut', () =>
+    assert.equal(new Set(shortcuts).size, shortcuts.length));
 
   // --- brand -------------------------------------------------------------
   const typography = await page.evaluate(() => {
@@ -218,6 +226,125 @@ try {
     assert.equal(part.w, 24);
     assert.equal(part.h, 12);
   });
+
+  // --- the sample house, its systems and its plot -------------------------
+  await loadTemplate('Sample house on a basement');
+  const house = await page.evaluate(() => {
+    const p = window.storystick.project;
+    const kinds = p.pages.map((x) => x.kind);
+    const foundation = p.pages.find((x) => x.kind === 'foundation');
+    const electrical = p.pages.find((x) => x.kind === 'electrical');
+    const roof = p.pages.find((x) => x.kind === 'roof');
+    const count = (pg, type) => pg.entities.filter((e) => e.type === type).length;
+    return {
+      kinds,
+      footings: count(foundation, 'footing'),
+      slabs: count(foundation, 'slab'),
+      beams: count(foundation, 'beam'),
+      fixtures: count(electrical, 'fixture'),
+      roofPlanes: count(roof, 'roofPlane'),
+      // Discipline sheets trace the plan rather than owning a copy of it.
+      tracesPlan: electrical.basePageId === p.pages.find((x) => x.kind === 'plan').id,
+      electricalWalls: count(electrical, 'wall'),
+    };
+  });
+  check('the sample house carries a full set of discipline sheets', () => {
+    for (const kind of ['foundation', 'plan', 'framing', 'roof', 'electrical', 'plumbing', 'mechanical']) {
+      assert.ok(house.kinds.includes(kind), `missing a ${kind} sheet`);
+    }
+  });
+  check('the foundation sheet carries footings, a slab and a beam', () => {
+    assert.ok(house.footings > 0);
+    assert.equal(house.slabs, 1);
+    assert.ok(house.beams > 0);
+  });
+  check('the roof is drawn as planes, not guessed', () => assert.equal(house.roofPlanes, 2));
+  check('the electrical sheet traces the plan instead of copying it', () => {
+    assert.ok(house.tracesPlan);
+    assert.equal(house.electricalWalls, 0);
+    assert.ok(house.fixtures > 20);
+  });
+
+  // Placing a symbol from the palette.
+  await page.evaluate(() => {
+    const app = window.storystick;
+    app.project.activePageId = app.project.pages.find((x) => x.kind === 'electrical').id;
+    app.refreshAll();
+    app.render();
+  });
+  await page.keyboard.press('q');
+  await sleep(200);
+  const paletteCount = await page.locator('.symbol-btn').count();
+  check('the symbol palette offers symbols for the active discipline', () =>
+    assert.ok(paletteCount > 5)
+  );
+  const beforeFixtures = await page.evaluate(
+    () => window.storystick.page.entities.filter((e) => e.type === 'fixture').length
+  );
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await sleep(200);
+  const afterFixtures = await page.evaluate(
+    () => window.storystick.page.entities.filter((e) => e.type === 'fixture').length
+  );
+  check('the symbol tool places the picked symbol', () =>
+    assert.equal(afterFixtures, beforeFixtures + 1)
+  );
+
+  // The blueprint plot: a real sheet at a real scale.
+  const plot = await page.evaluate(async () => {
+    const mod = await import('/src/features/blueprint.js');
+    const app = window.storystick;
+    const plan = app.project.pages.find((x) => x.kind === 'plan');
+    const found = app.project.pages.find((x) => x.kind === 'foundation');
+    const a = mod.renderSheet(app.project, plan, {});
+    const b = mod.renderSheet(app.project, found, {});
+    return {
+      svg: a.svg,
+      scale: a.scaleLabel,
+      standard: a.standardScale,
+      planNumber: a.sheetNumber,
+      foundationNumber: b.sheetNumber,
+      set: mod.renderSet(app.project, {}).length,
+    };
+  });
+  check('the sheet plots at a true architectural scale', () => {
+    assert.ok(plot.standard, 'scale is not a standard one');
+    assert.match(plot.scale, /=\s*1'-0"$/);
+  });
+  check('the sheet is sized in physical inches so 100% prints to scale', () => {
+    assert.match(plot.svg, /width="36in"\s+height="24in"/);
+    assert.ok(!/NaN/.test(plot.svg));
+    assert.ok(plot.svg.trim().endsWith('</svg>'));
+  });
+  check('sheet numbers carry their discipline prefix', () => {
+    assert.match(plot.planNumber, /^A-/);
+    assert.match(plot.foundationNumber, /^S-/);
+  });
+  check('the whole set renders as one printable document', () =>
+    assert.ok(plot.set > 20000)
+  );
+
+  // 3D: the whole building, basement included.
+  const model = await page.evaluate(async () => {
+    const mod = await import('/src/model3d/build.js');
+    const m = mod.buildBuildingModel(window.storystick.project, {});
+    return {
+      sheets: m.stats.sheets.length,
+      walls: m.stats.walls,
+      roof: m.stats.roof,
+      substructure: m.stats.substructure,
+      minY: m.bounds.minY,
+      maxY: m.bounds.maxY,
+    };
+  });
+  check('the 3D model stacks the basement under the floor', () => {
+    assert.ok(model.minY < -80, `basement floor at ${model.minY}`);
+    assert.ok(model.maxY > 150, `ridge at ${model.maxY}`);
+    assert.ok(model.substructure.slabs > 0);
+  });
+  check('a drawn roof is used instead of the generated gable', () =>
+    assert.equal(model.roof.style, 'drawn')
+  );
 
   // --- export + persistence ----------------------------------------------
   const svg = await page.evaluate(async () => {

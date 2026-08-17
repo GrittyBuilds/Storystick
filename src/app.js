@@ -31,7 +31,7 @@ import {
   saveCanvasMode,
 } from './core/store.js';
 import { CANVAS_MODES } from './render/theme.js';
-import { buildModel } from './model3d/build.js';
+import { buildModel, buildBuildingModel } from './model3d/build.js';
 import { Viewer3D, isWebglAvailable } from './model3d/viewer.js';
 import { CanvasInput } from './ui/canvas-input.js';
 import { initInstall, canInstall, promptInstall, isIosSafari, isStandalone } from './ui/install.js';
@@ -95,6 +95,9 @@ export class App {
     this.modelStats = null;
     this.showModelGrid = true;
     this.model3d = {
+      // Whole-building stacks the foundation, floor and roof sheets at their
+      // own elevations; sheet-only extrudes just what is in front of you.
+      scope: 'building',
       roofStyle: 'gable',
       roofPitch: 6,
       roofOverhang: 12,
@@ -753,7 +756,10 @@ export class App {
   /** Re-extrude the active sheet. Cheap enough to run on every edit. */
   rebuildModel(opts = {}) {
     if (!this.viewer || this.viewMode !== '3d') return;
-    const model = buildModel(this.project, this.page, this.model3d);
+    const model =
+      this.model3d.scope === 'building'
+        ? buildBuildingModel(this.project, this.model3d)
+        : buildModel(this.project, this.page, this.model3d);
     this.modelStats = model.stats;
     this.viewer.setModel(model);
     if (opts.frame !== false) this.viewer.frameAll();

@@ -17,7 +17,7 @@ import {
   outlines,
   roofHeightAt,
   roofEaveEdge,
-  roofPlaneArea,
+  roofSlopedArea,
   footingLength,
   beamWidth,
 } from '../core/entities.js';

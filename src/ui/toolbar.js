@@ -67,6 +67,24 @@ export function renderModelOptions(app, container) {
 
   container.appendChild(
     field(
+      'Build',
+      select(
+        [
+          { value: 'building', label: 'Whole building' },
+          { value: 'sheet', label: 'This sheet only' },
+        ],
+        m.scope,
+        (v) => {
+          m.scope = v;
+          app.rebuildModel({ frame: true });
+        }
+      ),
+      'Stacks the foundation, floor and roof sheets'
+    )
+  );
+
+  container.appendChild(
+    field(
       'Roof',
       select(
         [
@@ -134,9 +152,14 @@ export function renderModelOptions(app, container) {
   );
 
   if (stats) {
+    const sub = stats.substructure;
+    const extra = sub && (sub.footings || sub.slabs || sub.beams)
+      ? ` · ${sub.footings} footings · ${sub.slabs} slabs · ${sub.beams} beams`
+      : '';
+    const drawn = stats.roof && stats.roof.style === 'drawn' ? ` · ${stats.roof.planes} drawn roof planes` : '';
     const summary = stats.empty
-      ? 'Nothing on this sheet to build — draw walls, rooms or parts.'
-      : `${stats.walls} walls · ${stats.openings} openings · ${stats.parts} parts · ${stats.triangles.toLocaleString()} triangles`;
+      ? 'Nothing to build — draw walls, rooms or parts.'
+      : `${stats.walls} walls · ${stats.openings} openings · ${stats.parts} parts${extra}${drawn} · ${stats.triangles.toLocaleString()} triangles`;
     container.appendChild(el('span', { class: 'options-hint', text: summary }));
   }
 }

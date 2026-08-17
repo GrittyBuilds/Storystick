@@ -418,6 +418,39 @@ export function scheduleCsv(project) {
   for (const w of s.walls) {
     rows.push(['Wall', w.status, formatLength(w.length, sys), formatArea(w.netArea, sys), `${w.count} runs`]);
   }
+  for (const f of s.finishes) {
+    rows.push([
+      'Finish',
+      f.name,
+      `floor ${f.floor || '—'}`,
+      `walls ${f.walls || '—'}`,
+      `ceiling ${f.ceiling || '—'}`,
+    ]);
+  }
+  for (const a of s.assemblies.rows) {
+    rows.push([
+      'Assembly',
+      `${a.assembly} — ${a.layer}`,
+      a.unit === 'volume' ? `${a.volume.toFixed(2)} cu yd` : `${Math.round(a.area)} sq ft`,
+      a.unit === 'sheet' ? `${a.sheets} sheets` : '',
+      a.material || '',
+    ]);
+  }
+  for (const f of s.fixtures) {
+    rows.push(['Fixture', f.name, String(f.qty), f.discipline, f.tags.join(' ')]);
+  }
+  for (const b of s.structure.beams) {
+    rows.push(['Beam', b.tag || '—', b.size, `${b.plies} ply`, formatLength(b.span, sys)]);
+  }
+  for (const r of s.roof.rows) {
+    rows.push([
+      'Roof',
+      `${r.pitch}:12`,
+      formatArea(r.planArea, sys),
+      formatArea(r.slopedArea, sys),
+      '',
+    ]);
+  }
   return toCsv(rows);
 }
 

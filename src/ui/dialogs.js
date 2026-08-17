@@ -3,9 +3,11 @@
 import { el, clear, field, select, numberInput, textInput, table, money, downloadText, pickFile } from './dom.js';
 import { TEMPLATES } from '../features/templates.js';
 import { buildCutList } from '../features/cutlist.js';
-import { scheduleSummary } from '../features/schedule.js';
+import { scheduleSummary, missingFinishes } from '../features/schedule.js';
 import { buildEstimate } from '../features/estimate.js';
 import { pageToSvg, cutListCsv, scheduleCsv, estimateCsv } from '../features/export.js';
+import { renderSheet, renderSet } from '../features/blueprint.js';
+import { SHEET_SIZES } from '../features/sheet.js';
 import { listProjects, deleteProject, serializeProject } from '../core/store.js';
 import { formatLength, formatArea, parseLength } from '../core/units.js';
 import { PAGE_KINDS } from '../core/document.js';
@@ -455,6 +457,7 @@ export function cutListDialog(app) {
 export function scheduleDialog(app) {
   const p = app.project;
   const s = scheduleSummary(p);
+  const missing = missingFinishes(p);
   const sys = p.unitSystem;
 
   const body = el('div', { class: 'report' }, [
@@ -463,6 +466,7 @@ export function scheduleDialog(app) {
       el('div', {}, [el('strong', { text: formatArea(s.totals.floorArea, sys) }), el('span', { text: 'floor area' })]),
       el('div', {}, [el('strong', { text: String(s.totals.doors) }), el('span', { text: 'doors' })]),
       el('div', {}, [el('strong', { text: String(s.totals.windows) }), el('span', { text: 'windows' })]),
+      el('div', {}, [el('strong', { text: String(s.totals.fixtures) }), el('span', { text: 'fixtures' })]),
     ]),
     el('section', { class: 'report-section' }, [
       el('h3', { text: 'Room schedule' }),
@@ -523,6 +527,121 @@ export function scheduleDialog(app) {
           )
         : el('p', { class: 'muted', text: 'No walls drawn.' }),
     ]),
+    el('section', { class: 'report-section' }, [
+      el('h3', { text: 'Finish schedule' }),
+      s.finishes.length
+        ? table(
+            ['Room', 'Floor', 'Base', 'Walls', 'Ceiling', 'Clg ht', 'Floor area', 'Wall area'],
+            s.finishes.map((f) => [
+              f.name,
+              f.floor || '—',
+              f.base || '—',
+              f.walls || '—',
+              f.ceiling || '—',
+              app.fmtShort(f.ceilingHeight),
+              formatArea(f.floorArea, sys),
+              formatArea(f.wallArea, sys),
+            ]),
+            { mono: [5, 6, 7] }
+          )
+        : el('p', { class: 'muted', text: 'No rooms to schedule finishes for.' }),
+      missing.length
+        ? alertBox(
+            'warn',
+            'Finishes not specified',
+            `${missing.map((m) => `${m.name} (${m.missing.join(', ')})`).join('; ')}. A blank finish is a question for somebody, not a default.`
+          )
+        : null,
+    ]),
+    el('section', { class: 'report-section' }, [
+      el('h3', { text: 'Assembly takeoff' }),
+      s.assemblies.rows.length
+        ? table(
+            ['Assembly', 'Layer', 'Quantity'],
+            s.assemblies.rows.map((r) => [
+              r.assembly,
+              r.layer,
+              r.unit === 'volume'
+                ? `${r.volume.toFixed(1)} cu yd`
+                : r.unit === 'sheet'
+                  ? `${Math.round(r.area)} sq ft · ${r.sheets} sheets`
+                  : `${Math.round(r.area)} sq ft`,
+            ]),
+            { mono: [2] }
+          )
+        : el('p', { class: 'muted', text: 'No walls have an assembly assigned yet.' }),
+      s.assemblies.unassigned.length
+        ? alertBox(
+            'warn',
+            'Walls without an assembly',
+            `${s.assemblies.unassigned.length} wall${
+              s.assemblies.unassigned.length === 1 ? '' : 's'
+            } have only a thickness, so no drywall, sheathing or insulation is counted for them. Assign an assembly in Properties.`
+          )
+        : null,
+    ]),
+    s.structure.footings.length || s.structure.slabs.length || s.structure.beams.length
+      ? el('section', { class: 'report-section' }, [
+          el('h3', { text: 'Foundation & structure' }),
+          table(
+            ['Item', 'Quantity'],
+            [
+              ['Footing concrete', `${s.structure.totals.footingVolume.toFixed(1)} cu yd`],
+              ['Slab concrete', `${s.structure.totals.slabVolume.toFixed(1)} cu yd`],
+              ['Slab area', formatArea(s.structure.totals.slabArea, sys)],
+              ['Beam length', formatLength(s.structure.totals.beamLength, sys)],
+            ],
+            { mono: [1] }
+          ),
+          s.structure.beams.length
+            ? table(
+                ['Tag', 'Size', 'Plies', 'Span', 'Sheet'],
+                s.structure.beams.map((b) => [
+                  b.tag || '—',
+                  b.size,
+                  String(b.plies),
+                  formatLength(b.span, sys),
+                  b.page,
+                ]),
+                { mono: [0, 2, 3] }
+              )
+            : null,
+        ])
+      : null,
+    s.roof.rows.length
+      ? el('section', { class: 'report-section' }, [
+          el('h3', { text: 'Roof takeoff' }),
+          table(
+            ['Pitch', 'Plan area', 'Sloped area', 'Ridge height'],
+            s.roof.rows.map((r) => [
+              `${r.pitch}:12`,
+              formatArea(r.planArea, sys),
+              formatArea(r.slopedArea, sys),
+              formatLength(r.ridgeHeight, sys),
+            ]),
+            { mono: [0, 1, 2, 3] }
+          ),
+          el('p', {
+            class: 'muted small',
+            text: `${s.roof.totals.squares.toFixed(1)} squares of roofing before waste and starter course.`,
+          }),
+        ])
+      : null,
+    s.fixtures.length
+      ? el('section', { class: 'report-section' }, [
+          el('h3', { text: 'Fixture schedule' }),
+          table(
+            ['Discipline', 'Symbol', 'Qty', 'Tags'],
+            s.fixtures.map((f) => [
+              f.discipline,
+              f.name,
+              String(f.qty),
+              f.tags.join(', ') || '—',
+            ]),
+            { mono: [2] }
+          ),
+        ])
+      : null,
   ]);
 
   openModal({
@@ -598,22 +717,82 @@ export function exportDialog(app) {
     app.page.id,
     () => {}
   );
+  const sheetSelect = select(
+    Object.entries(SHEET_SIZES).map(([id, s]) => ({ value: id, label: s.label })),
+    (p.sheet && p.sheet.size) || 'ARCH-D',
+    (v) => {
+      p.sheet.size = v;
+      app.touch('Change sheet size');
+    }
+  );
+  const orientSelect = select(
+    [
+      { value: 'landscape', label: 'Landscape' },
+      { value: 'portrait', label: 'Portrait' },
+    ],
+    (p.sheet && p.sheet.orientation) || 'landscape',
+    (v) => {
+      p.sheet.orientation = v;
+      app.touch('Change orientation');
+    }
+  );
+  const sheetOpts = () => ({
+    size: sheetSelect.value,
+    orientation: orientSelect.value,
+  });
+  const current = () => p.pages.find((x) => x.id === pageSelect.value) || app.page;
 
   const body = el('div', { class: 'export-grid' }, [
     field('Sheet to export', pageSelect),
+    field('Paper size', sheetSelect),
+    field('Orientation', orientSelect),
+    el('p', {
+      class: 'muted small',
+      text:
+        'Blueprints plot at a true architectural scale on the paper size above. Print at 100% — not "fit to page" — and a scale rule will read real dimensions off the print.',
+    }),
     el('div', { class: 'export-actions' }, [
       el('button', {
-        class: 'btn',
-        text: 'Drawing as SVG',
+        class: 'btn primary',
+        text: 'Blueprint sheet (SVG)',
         onclick: () => {
-          const page = p.pages.find((x) => x.id === pageSelect.value) || app.page;
+          const page = current();
+          const out = renderSheet(p, page, sheetOpts());
+          if (!out.standardScale) {
+            app.setStatus(
+              'That sheet does not fit any standard scale — the plot is marked "do not measure". Try a larger paper size.'
+            );
+          }
+          downloadText(
+            `${app.slug()}-${out.sheetNumber}.svg`,
+            out.svg,
+            'image/svg+xml'
+          );
+        },
+      }),
+      el('button', {
+        class: 'btn primary',
+        text: 'Print the whole set',
+        onclick: () => printSet(app, sheetOpts()),
+      }),
+      el('button', {
+        class: 'btn',
+        text: 'Drawing set (HTML)',
+        onclick: () =>
+          downloadText(`${app.slug()}-set.html`, renderSet(p, sheetOpts()), 'text/html'),
+      }),
+      el('button', {
+        class: 'btn',
+        text: 'Plain drawing as SVG',
+        onclick: () => {
+          const page = current();
           downloadText(`${app.slug()}-${page.name.replace(/\s+/g, '-').toLowerCase()}.svg`, pageToSvg(p, page), 'image/svg+xml');
         },
       }),
       el('button', {
         class: 'btn',
         text: 'Drawing as PNG',
-        onclick: () => app.exportPng(p.pages.find((x) => x.id === pageSelect.value) || app.page),
+        onclick: () => app.exportPng(current()),
       }),
       el('button', {
         class: 'btn',
@@ -640,9 +819,31 @@ export function exportDialog(app) {
 
   openModal({
     title: 'Export',
-    subtitle: 'SVG keeps the drawing to scale and vector-crisp for printing.',
+    subtitle: 'Blueprints plot to a true architectural scale; the plain SVG is the raw drawing.',
     body,
     actions: [{ label: 'Done', primary: true, onClick: (close) => close() }],
+  });
+}
+
+/**
+ * Hand the whole set to the browser's print dialog in its own window, sized to
+ * the paper it was drawn for. Printing the app's own page would print the app;
+ * this prints the drawings.
+ */
+function printSet(app, options) {
+  const html = renderSet(app.project, options);
+  const win = window.open('', '_blank');
+  if (!win) {
+    app.setStatus('The browser blocked the print window. Allow pop-ups, or download the set as HTML.');
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  // Wait for layout before asking to print, or the first sheet prints blank.
+  win.addEventListener('load', () => {
+    win.focus();
+    win.print();
   });
 }
 

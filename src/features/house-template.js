@@ -320,7 +320,7 @@ function foundationPlan(project, plan) {
   page.entities.push(
     makeSlab([pt(fi, fi), pt(W - fi, fi), pt(W - fi, H - fi), pt(fi, H - fi)], 'slab', {
       thickness: 4,
-      topElevation: -(BSMT_HEIGHT + 4),
+      topElevation: -BSMT_HEIGHT,
       reinforcement: '6x6 W1.4/W1.4 welded wire mesh',
     })
   );
@@ -522,7 +522,8 @@ function electricalPlan(project, plan) {
   fixture(page, 'e-recep-wp', 33 * FT, H - EI, L, S);
   fixture(page, 'e-light-wall', 11.5 * FT, H, L, S);
   fixture(page, 'e-chime', 13 * FT, H - EI, L, S);
-  fixture(page, 'e-thermostat', GRID.living + INT_T / 2, 20 * FT, L, { ...D, rot: FACE.west });
+  // The thermostat lives on the mechanical sheet — showing it on both would
+  // count one device twice in the fixture schedule.
   return page;
 }
 
