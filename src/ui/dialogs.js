@@ -213,7 +213,8 @@ export function settingsDialog(app) {
           app.touch('Change precision');
           app.refreshAll();
         }
-      )
+      ),
+      'Also the distance one arrow-key press nudges the selection'
     ),
     lengthField('Grid spacing', p.gridSize, (v) => { p.gridSize = v; app.touch('Change grid'); app.render(); }),
     lengthField('Default wall thickness', p.defaultWallThickness, (v) => {
@@ -937,8 +938,14 @@ export function helpDialog() {
     ['L / B / P', 'Line / Rectangle / Polyline'],
     ['C / A', 'Circle / Arc'],
     ['K', 'Woodworking part'],
+    ['F / G / J / H / I', 'Roof plane / Footing / Pad / Slab / Beam'],
+    ['Q', 'Place a plan symbol — R rotates it, F flips it'],
     ['M / T / E', 'Dimension / Text / Measure'],
     ['Type a number + Enter', 'Exact length while drawing (e.g. 8\' or 8\'-6 1/2" or 48 x 24)'],
+    ['Arrow keys', 'Nudge the selection by one fraction-precision step'],
+    ['Shift + arrow', 'Nudge ten steps · Alt + arrow nudges one grid square'],
+    ['Type <45 + Enter', 'Point the selected wall or symbol at 45°'],
+    ['Type <+15 + Enter', 'Turn the selection 15° further (a sign means relative)'],
     ['Shift (while drawing)', 'Constrain to 90° — hold Alt for 45°'],
     ['Space or middle-drag', 'Pan · scroll wheel zooms'],
     ['F', 'Zoom to fit'],
@@ -954,7 +961,7 @@ export function helpDialog() {
       table(['Key', 'Action'], rows),
       el('p', {
         class: 'muted',
-        text: 'Lengths accept feet-and-inches (4\'-6 1/2"), plain inches (54.5) or metric (1400mm) depending on the project units.',
+        text: 'Lengths accept feet-and-inches (4\'-6 1/2"), plain inches (54.5) or metric (1400mm) depending on the project units. Angles have to say they are angles — <45 or 45° — so a bare number stays a length.',
       }),
     ]),
     wide: true,

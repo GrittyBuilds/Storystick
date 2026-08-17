@@ -29,8 +29,8 @@ local storage automatically, and can be exported to a `.storystick` file to
 move between machines.
 
 ```bash
-npm test              # 250 unit tests — units, geometry, documents, sheets, symbols, 3D, codes, structural
-npm run smoke         # 35 end-to-end browser checks (needs the optional playwright dep)
+npm test              # 283 unit tests — units, geometry, documents, transforms, sheets, symbols, 3D, codes, structural
+npm run smoke         # 43 end-to-end browser checks (needs the optional playwright dep)
 npm run smoke:mobile  # 9 checks on a phone and tablet viewport
 ```
 
@@ -193,6 +193,18 @@ only one wall. The same goes for the plumbing, mechanical and framing sheets.
   perpendicular feet and nearest-point-on-edge, plus a grid snap. `F3` and `F7`
   toggle them; the status bar names whatever you are currently snapped to.
 - **Ortho.** Hold `Shift` for 90°, `Alt` for 45°, or press `F8` to latch it on.
+- **Nudge with the arrow keys.** Whatever is selected moves by exactly one step
+  of the fraction precision the project displays — set it to 1/16" and an arrow
+  press moves 1/16", so what you nudge is what you can read back off the
+  dimension. `Shift` takes ten steps, `Alt` one grid square. A burst of taps is
+  one undo, not fifty. Doors and windows are hosted, so they slide *along* their
+  wall rather than floating off it.
+- **Type an angle.** With something selected, `<45` points it at 45°, turning
+  about the end it started from so the end you placed stays put and the length
+  does not change. A sign makes it relative: `<+15` turns fifteen degrees
+  further. Angles have to say they are angles — `<45` or `45°` — so a bare `45`
+  is still 45 inches and cannot rotate a wall by accident. The same two controls
+  sit in Properties as **Set to** and **Turn by**, with ↺/↻ 90° buttons.
 - **Units.** Imperial with real fractions (down to 1/64") or metric — switch
   the whole project at any time in Settings; every label reformats.
 
@@ -379,6 +391,9 @@ DOM only appears in `src/ui`, `src/render` and `src/app.js`.
 
 ## Notes and limits
 
+- Rectangles and woodworking parts are stored as two opposite corners, which can
+  only describe an axis-aligned box, so they cannot carry a rotation. Asking to
+  turn one is refused by name rather than silently reshaping it.
 - The 3D model is massing, not construction. There is no framing member
   generation, no rafter or truss layout, and no stair geometry — a stair is a
   labelled room, not a modelled flight.

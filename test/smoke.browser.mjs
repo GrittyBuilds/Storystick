@@ -227,6 +227,132 @@ try {
     assert.equal(part.h, 12);
   });
 
+  // --- nudge and rotate ---------------------------------------------------
+  await loadTemplate('12 × 16 storage shed');
+  await page.keyboard.press('v');
+
+  // Select one wall and nudge it with the arrow keys.
+  const wallStart = await page.evaluate(() => {
+    const app = window.storystick;
+    const wall = app.page.entities.find((e) => e.type === 'wall');
+    app.setSelection([wall.id]);
+    app.render();
+    return { id: wall.id, ax: wall.a.x, ay: wall.a.y };
+  });
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
+  await sleep(120);
+  const nudged = await page.evaluate((id) => {
+    const app = window.storystick;
+    const wall = app.page.entities.find((e) => e.id === id);
+    return { ax: wall.a.x, ay: wall.a.y, step: app.nudgeStep() };
+  }, wallStart.id);
+  check('arrow keys nudge by exactly one step of the display precision', () => {
+    assert.equal(nudged.step, 1 / 16);
+    assert.ok(Math.abs(nudged.ax - (wallStart.ax + 2 / 16)) < 1e-9, `x is ${nudged.ax}`);
+    assert.ok(Math.abs(nudged.ay - (wallStart.ay + 1 / 16)) < 1e-9, `y is ${nudged.ay}`);
+  });
+
+  // The whole run should undo in one press.
+  await page.keyboard.press('Control+z');
+  await sleep(120);
+  const afterUndo = await page.evaluate((id) => {
+    const wall = window.storystick.page.entities.find((e) => e.id === id);
+    return { ax: wall.a.x, ay: wall.a.y };
+  }, wallStart.id);
+  check('a run of nudges undoes in one step', () => {
+    assert.ok(Math.abs(afterUndo.ax - wallStart.ax) < 1e-9, `x is ${afterUndo.ax}`);
+    assert.ok(Math.abs(afterUndo.ay - wallStart.ay) < 1e-9, `y is ${afterUndo.ay}`);
+  });
+
+  // Changing the precision changes the step.
+  const coarseStep = await page.evaluate(() => {
+    const app = window.storystick;
+    app.project.denominator = 8;
+    return app.nudgeStep();
+  });
+  check('the nudge follows the fraction precision setting', () =>
+    assert.equal(coarseStep, 1 / 8)
+  );
+  await page.evaluate(() => {
+    window.storystick.project.denominator = 16;
+  });
+
+  // Typing an angle points the selected wall.
+  await page.fill('#command-input', '<45');
+  await page.press('#command-input', 'Enter');
+  await sleep(150);
+  const angled = await page.evaluate((id) => {
+    const app = window.storystick;
+    const wall = app.page.entities.find((e) => e.id === id);
+    return {
+      degrees: (Math.atan2(wall.b.y - wall.a.y, wall.b.x - wall.a.x) * 180) / Math.PI,
+      ax: wall.a.x,
+      ay: wall.a.y,
+      length: Math.hypot(wall.b.x - wall.a.x, wall.b.y - wall.a.y),
+    };
+  }, wallStart.id);
+  check('typing <45 points the selected wall at 45 degrees', () => {
+    assert.ok(Math.abs(angled.degrees - 45) < 1e-6, `angle is ${angled.degrees}`);
+    // It turns about the end it starts from, and keeps its length.
+    assert.ok(Math.abs(angled.ax - wallStart.ax) < 1e-9);
+    assert.ok(Math.abs(angled.length - 192) < 1e-6, `length is ${angled.length}`);
+  });
+
+  // A relative angle turns further.
+  await page.fill('#command-input', '<+15');
+  await page.press('#command-input', 'Enter');
+  await sleep(150);
+  const turned = await page.evaluate((id) => {
+    const wall = window.storystick.page.entities.find((e) => e.id === id);
+    return (Math.atan2(wall.b.y - wall.a.y, wall.b.x - wall.a.x) * 180) / Math.PI;
+  }, wallStart.id);
+  check('a signed angle turns further rather than setting an absolute one', () =>
+    assert.ok(Math.abs(turned - 60) < 1e-6, `angle is ${turned}`)
+  );
+
+  // A bare number is still a length, not an angle.
+  const bareNumber = await page.evaluate((id) => {
+    const app = window.storystick;
+    const wall = app.page.entities.find((e) => e.id === id);
+    const before = (Math.atan2(wall.b.y - wall.a.y, wall.b.x - wall.a.x) * 180) / Math.PI;
+    app.runCommand('45');
+    const after = (Math.atan2(wall.b.y - wall.a.y, wall.b.x - wall.a.x) * 180) / Math.PI;
+    return { before, after };
+  }, wallStart.id);
+  check('a bare number does not rotate anything', () =>
+    assert.equal(bareNumber.before, bareNumber.after)
+  );
+
+  // The properties panel exposes the same controls.
+  await page.evaluate(() => window.storystick.refreshAll());
+  await sleep(150);
+  const panelFields = await page.evaluate(() =>
+    [...document.querySelectorAll('#panel-properties .field-label')].map((n) => n.textContent)
+  );
+  check('the properties panel offers a set-angle and a turn-by control', () => {
+    assert.ok(panelFields.includes('Set to'), `fields were ${panelFields.join(', ')}`);
+    assert.ok(panelFields.includes('Turn by'));
+  });
+
+  // A part is axis-aligned, so rotating it is refused rather than faked.
+  const refused = await page.evaluate(async () => {
+    const { makePart } = await import('/src/core/entities.js');
+    const app = window.storystick;
+    const part = app.add(makePart({ x: 0, y: 0 }, { x: 24, y: 12 }, 'parts', {}), 'Test part');
+    app.setSelection([part.id]);
+    const before = JSON.stringify(part);
+    const ok = app.rotateSelection(45, { absolute: true });
+    const after = app.page.entities.find((e) => e.id === part.id);
+    return { ok, unchanged: JSON.stringify(after) === before, message: app.statusMessage };
+  });
+  check('an axis-aligned part refuses rotation instead of deforming', () => {
+    assert.equal(refused.ok, false);
+    assert.ok(refused.unchanged, 'the part was modified anyway');
+    assert.match(refused.message, /cannot carry a rotation/);
+  });
+
   // --- the sample house, its systems and its plot -------------------------
   await loadTemplate('Sample house on a basement');
   const house = await page.evaluate(() => {

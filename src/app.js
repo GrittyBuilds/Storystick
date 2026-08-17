@@ -2,7 +2,14 @@
 // active tool and every DOM binding.
 
 import * as g from './core/geometry.js';
-import { formatLength, parseLength } from './core/units.js';
+import {
+  formatLength,
+  parseLength,
+  parseAngle,
+  formatAngle,
+  toRadians,
+  mmToIn,
+} from './core/units.js';
 import {
   createProject,
   activePage,
@@ -13,7 +20,19 @@ import {
   removePage,
   cloneProject,
 } from './core/document.js';
-import { uid, bboxOfMany, translate, findEntity, wallLength, hitTest } from './core/entities.js';
+import {
+  uid,
+  bboxOfMany,
+  translate,
+  findEntity,
+  wallLength,
+  hitTest,
+  canRotate,
+  rotateEntity,
+  setEntityAngle,
+  entityAngle,
+  ENTITY_LABELS,
+} from './core/entities.js';
 import { History } from './core/history.js';
 import { resolveSnap, applyConstraint, SNAP_LABELS } from './core/snap.js';
 import { Viewport } from './render/viewport.js';
@@ -72,6 +91,8 @@ export class App {
     this.spaceDown = false;
     this.dirty = false;
     this.autosaveTimer = null;
+    this.nudgeTimer = null;
+    this.nudgeKey = null;
     this.statusMessage = '';
     this.canvasMode = loadCanvasMode();
     document.body.dataset.mode = this.canvasMode;
@@ -223,8 +244,8 @@ export class App {
   }
 
   /** Record a change: history entry, autosave, full UI refresh. */
-  commit(label = 'Edit') {
-    this.history.commit(this.project, label);
+  commit(label = 'Edit', group = null) {
+    this.history.commit(this.project, label, group);
     this.scheduleAutosave();
     this.refreshAll();
     // Keep the 3D massing in step with the drawing, without re-framing the camera.
@@ -285,6 +306,126 @@ export class App {
     const wanted = map[kind];
     if (wanted && this.project.layers.some((l) => l.id === wanted)) return wanted;
     return this.project.activeLayerId;
+  }
+
+  // --- nudge and rotate --------------------------------------------------
+
+  /**
+   * How far one arrow-key press moves things: exactly the precision the project
+   * is set to display. If the drawing reads to 1/16", the arrow keys move by
+   * 1/16", so what you nudge is what you can read back off the dimension.
+   * Metric works to the millimetre, which is the same idea.
+   */
+  nudgeStep(multiplier = 1) {
+    const base =
+      this.project.unitSystem === 'metric'
+        ? mmToIn(1)
+        : 1 / (this.project.denominator || 16);
+    return base * multiplier;
+  }
+
+  /**
+   * Move the selection by one step. Openings are hosted, so they slide along
+   * their wall rather than floating off it.
+   */
+  nudgeSelection(dx, dy, multiplier = 1) {
+    if (!this.selection.size) {
+      this.setStatus('Select something first, then the arrow keys move it.', true);
+      return false;
+    }
+    const step = this.nudgeStep(multiplier);
+    const delta = g.vec(dx * step, dy * step);
+    let moved = 0;
+    for (const id of this.selection) {
+      const ent = findEntity(this.page, id);
+      if (!ent) continue;
+      if (ent.type === 'opening') {
+        const host = findEntity(this.page, ent.host);
+        const total = host ? wallLength(host) : 0;
+        if (!total) continue;
+        // Project the nudge onto the wall it lives in.
+        const dir = g.norm(g.sub(host.b, host.a));
+        const along = g.dot(delta, dir);
+        if (!along) continue;
+        const half = ent.width / 2 / total;
+        ent.t = Math.min(1 - half, Math.max(half, ent.t + along / total));
+        moved += 1;
+        continue;
+      }
+      translate(ent, delta);
+      moved += 1;
+    }
+    if (!moved) return false;
+
+    // A run of taps is one thing the user did, so it is one undo. The run ends
+    // when they stop for a moment.
+    this.commit(`Nudge ${this.fmt(step)}`, this.nudgeGroup());
+    this.setStatus(`Moved ${moved} object${moved === 1 ? '' : 's'} by ${this.fmt(step)}.`);
+    return true;
+  }
+
+  /**
+   * The key that ties one run of nudges together. It has to be cleared when the
+   * run ends, or every nudge for the rest of the session would fold into a
+   * single undo step.
+   */
+  nudgeGroup() {
+    clearTimeout(this.nudgeTimer);
+    this.nudgeTimer = setTimeout(() => {
+      this.history.endGroup();
+      this.nudgeKey = null;
+    }, 700);
+    if (!this.nudgeKey) this.nudgeKey = `nudge-${Date.now()}`;
+    return this.nudgeKey;
+  }
+
+  /**
+   * Turn the selection.
+   *
+   * With one entity that has a direction of its own — a wall, a line, a beam,
+   * a fixture — an absolute angle points it that way, turning about the end it
+   * starts from so the end you placed stays put. Anything else turns by the
+   * angle as a delta, about the middle of the selection.
+   */
+  rotateSelection(degrees, { absolute = false } = {}) {
+    const ids = [...this.selection];
+    if (!ids.length) {
+      this.setStatus('Select something first, then type an angle.', true);
+      return false;
+    }
+    const entities = ids.map((id) => findEntity(this.page, id)).filter(Boolean);
+    const blocked = entities.filter((e) => !canRotate(e));
+    if (blocked.length) {
+      const names = [...new Set(blocked.map((e) => ENTITY_LABELS[e.type] || e.type))].join(' and ');
+      this.setStatus(
+        `${names} are stored as an axis-aligned box and cannot carry a rotation — nothing was turned.`,
+        true
+      );
+      return false;
+    }
+
+    const radians = toRadians(degrees);
+    if (absolute && entities.length === 1 && entityAngle(entities[0]) !== null) {
+      const ent = entities[0];
+      setEntityAngle(ent, radians, this.page);
+      this.commit('Set angle');
+      this.setStatus(
+        `${ENTITY_LABELS[ent.type] || 'Object'} set to ${formatAngle(entityAngle(ent))}.`
+      );
+      return true;
+    }
+
+    const box = bboxOfMany(entities, this.page);
+    const pivot = box && g.bboxValid(box) ? g.bboxCenter(box) : g.vec(0, 0);
+    for (const ent of entities) rotateEntity(ent, radians, pivot);
+    this.commit('Rotate');
+    const turned = `${degrees > 0 ? '+' : ''}${Number(degrees.toFixed(2))}°`;
+    this.setStatus(
+      absolute && entities.length === 1
+        ? `That object has no angle of its own, so it was turned ${turned} instead.`
+        : `Turned ${entities.length} object${entities.length === 1 ? '' : 's'} by ${turned}.`
+    );
+    return true;
   }
 
   nextBeamNumber() {
@@ -1062,6 +1203,27 @@ export class App {
         return;
       }
 
+      // Arrow keys nudge the selection by exactly the fraction precision the
+      // project displays. Shift takes ten steps, Alt one grid square.
+      const NUDGE = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      if (NUDGE[e.key] && this.viewMode === '2d') {
+        e.preventDefault();
+        const [dx, dy] = NUDGE[e.key];
+        if (e.altKey) {
+          const grid = this.project.gridSize || this.nudgeStep();
+          this.nudgeSelection(dx, dy, grid / this.nudgeStep());
+        } else {
+          this.nudgeSelection(dx, dy, e.shiftKey ? 10 : 1);
+        }
+        this.render();
+        return;
+      }
+
       switch (e.key) {
         case 'Escape':
           this.activeTool.reset();
@@ -1140,6 +1302,11 @@ export class App {
   }
 
   runCommand(text) {
+    // An angle is tried first, because it announces itself: `<45` or `45°`.
+    // A bare number stays a length, so typing 45 still means 45 inches.
+    const angle = parseAngle(text);
+    if (angle) return this.rotateSelection(angle.degrees, { absolute: !angle.relative });
+
     const values = text
       .split(/[x,×]/i)
       .map((part) => parseLength(part.trim(), this.project.unitSystem))
@@ -1148,7 +1315,10 @@ export class App {
       // Errors name the fix, not just the failure.
       const example =
         this.project.unitSystem === 'metric' ? '2600, 2.6m or 8\'-6"' : '8\', 8\'-6 1/2" or 102.5';
-      this.setStatus(`“${text}” isn’t a length Storystick can read. Try ${example}.`, true);
+      this.setStatus(
+        `“${text}” isn’t a length or an angle Storystick can read. Try ${example} for a length, or <45 for an angle.`,
+        true
+      );
       return false;
     }
     const handled = this.activeTool.applyNumeric(values);

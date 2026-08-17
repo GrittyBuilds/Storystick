@@ -593,6 +593,113 @@ export function translate(ent, d) {
   return ent;
 }
 
+/**
+ * Entities whose geometry states a direction: they run from a to b, so "what
+ * angle is this?" has an answer and can be set outright.
+ */
+const DIRECTIONAL = new Set(['line', 'wall', 'beam', 'dim']);
+
+/**
+ * Entities that carry no rotation at all. A rect and a part are stored as two
+ * opposite corners, which can only describe an axis-aligned box — rotating one
+ * would need a field the rest of the app (outlines, hit testing, the cut list,
+ * the 3D build) does not read. Rather than silently rotate the corner points
+ * and hand back a differently-shaped rectangle, these are refused by name.
+ */
+export const UNROTATABLE = new Set(['rect', 'part']);
+
+export function canRotate(ent) {
+  return !UNROTATABLE.has(ent.type);
+}
+
+/** The direction an entity points, in radians, or null if it has no direction. */
+export function entityAngle(ent) {
+  if (!ent) return null;
+  if (DIRECTIONAL.has(ent.type)) return g.angleOf(g.sub(ent.b, ent.a));
+  if (ent.type === 'footing' && ent.kind !== 'pad') return g.angleOf(g.sub(ent.b, ent.a));
+  if (ent.type === 'fixture' || ent.type === 'text') return ent.rot || 0;
+  return null;
+}
+
+/** The point a set-the-angle turn pivots about: where the entity starts. */
+export function rotationPivot(ent, page) {
+  if (!ent) return null;
+  if (DIRECTIONAL.has(ent.type)) return g.clone(ent.a);
+  if (ent.type === 'footing') return ent.kind === 'pad' ? g.clone(ent.a) : g.clone(ent.a);
+  if (ent.type === 'fixture' || ent.type === 'text') return g.clone(ent.p);
+  if (ent.type === 'circle' || ent.type === 'arc') return g.clone(ent.c);
+  if (Array.isArray(ent.pts) && ent.pts.length) return g.polygonCentroid(ent.pts);
+  const box = bboxOf(ent, page);
+  return box && g.bboxValid(box) ? g.bboxCenter(box) : null;
+}
+
+/**
+ * Turn an entity by `delta` radians about `pivot`.
+ * @returns true if it turned, false if this kind of entity cannot.
+ */
+export function rotateEntity(ent, delta, pivot) {
+  if (!canRotate(ent)) return false;
+  const turn = (p) => g.rotate(p, delta, pivot);
+  switch (ent.type) {
+    case 'line':
+    case 'dim':
+    case 'wall':
+    case 'beam':
+      ent.a = turn(ent.a);
+      ent.b = turn(ent.b);
+      return true;
+    case 'footing':
+      ent.a = turn(ent.a);
+      if (ent.kind !== 'pad') ent.b = turn(ent.b);
+      return true;
+    case 'circle':
+      ent.c = turn(ent.c);
+      return true;
+    case 'arc': {
+      ent.c = turn(ent.c);
+      // Normalise the start but shift the end by the same amount, so the sweep
+      // between them survives. Wrapping them independently would turn a 30°
+      // arc into a 330° one.
+      const start = g.normalizeAngle(ent.a0 + delta);
+      ent.a1 = start + (ent.a1 - ent.a0);
+      ent.a0 = start;
+      return true;
+    }
+    case 'polyline':
+    case 'room':
+    case 'slab':
+    case 'roofPlane':
+      ent.pts = ent.pts.map(turn);
+      return true;
+    case 'text':
+    case 'fixture':
+      ent.p = turn(ent.p);
+      // Wrapped, so turning something a hundred times does not accumulate an
+      // ever-growing number that eventually loses precision.
+      ent.rot = g.normalizeAngle((ent.rot || 0) + delta);
+      return true;
+    // An opening rides its host wall; turning the wall turns the opening.
+    case 'opening':
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Point an entity at an absolute angle, turning about where it starts so the
+ * end a user grabbed stays put. Only entities that have an angle can be set to
+ * one — everything else has to be turned by a delta instead.
+ * @returns true if it was set.
+ */
+export function setEntityAngle(ent, radians, page) {
+  const current = entityAngle(ent);
+  if (current === null) return false;
+  const pivot = rotationPivot(ent, page);
+  if (!pivot) return false;
+  return rotateEntity(ent, radians - current, pivot);
+}
+
 /** Grips shown when a single entity is selected. */
 export function handlesOf(ent, page) {
   switch (ent.type) {

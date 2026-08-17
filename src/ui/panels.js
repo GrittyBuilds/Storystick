@@ -1,7 +1,15 @@
 // Sidebar panels: sheets, layers and the context-sensitive properties editor.
 
 import { el, clear, field, select, numberInput, textInput } from './dom.js';
-import { formatLength, formatArea, parseLength } from '../core/units.js';
+import {
+  formatLength,
+  formatArea,
+  parseLength,
+  parseAngle,
+  formatAngle,
+  toDegrees,
+  toRadians,
+} from '../core/units.js';
 import {
   WALL_STATUS,
   ROOM_USES,
@@ -9,6 +17,10 @@ import {
   wallLength,
   findEntity,
   openingHead,
+  ENTITY_LABELS,
+  canRotate,
+  entityAngle,
+  setEntityAngle,
 } from '../core/entities.js';
 import { layerColor } from '../render/theme.js';
 import * as g from '../core/geometry.js';
@@ -196,9 +208,11 @@ function geometrySummary(app, ent) {
   switch (ent.type) {
     case 'line':
     case 'dim':
-      return `${formatLength(g.dist(ent.a, ent.b), sys)} long`;
+      return `${formatLength(g.dist(ent.a, ent.b), sys)} long · ${formatAngle(entityAngle(ent))}`;
     case 'wall':
-      return `${formatLength(wallLength(ent), sys)} long`;
+      return `${formatLength(wallLength(ent), sys)} long · ${formatAngle(entityAngle(ent))}`;
+    case 'beam':
+      return `${formatLength(g.dist(ent.a, ent.b), sys)} span · ${formatAngle(entityAngle(ent))}`;
     case 'rect':
     case 'part': {
       const w = Math.abs(ent.b.x - ent.a.x);
@@ -433,12 +447,6 @@ function entityEditor(app, ent) {
       );
       fields.push(field('Tag', textInput(ent.tag || '', (v) => { ent.tag = v; change('Tag fixture'); })));
       fields.push(
-        field('Rotation', numberInput(Math.round(((ent.rot || 0) * 180) / Math.PI), (v) => {
-          ent.rot = (v * Math.PI) / 180;
-          change('Rotate fixture');
-        }, { step: 15 }), 'degrees')
-      );
-      fields.push(
         el('button', {
           class: 'btn tiny',
           text: ent.mirrored ? 'Unflip' : 'Flip',
@@ -657,12 +665,6 @@ function entityEditor(app, ent) {
           change('Change text size');
         }))
       );
-      fields.push(
-        field('Rotation', numberInput(Math.round((ent.rot * 180) / Math.PI), (v) => {
-          ent.rot = (v * Math.PI) / 180;
-          change('Rotate text');
-        }, { step: 15 }), 'degrees')
-      );
       break;
 
     case 'dim':
@@ -701,6 +703,117 @@ function entityEditor(app, ent) {
   }
 
   return fields;
+}
+
+/**
+ * Angle controls, for one object or a whole selection.
+ *
+ * Two different questions get two different controls. A wall, a line, a beam or
+ * a placed symbol has an angle of its own, so it gets an **Angle** field you
+ * type a bearing into. Anything can be **turned by** an amount about the middle
+ * of the selection. Mixing those into one box is how people end up rotating a
+ * wall to 45° when they meant to turn it 45° further.
+ */
+function rotationEditor(app, ids) {
+  const entities = ids.map((id) => app.page.entities.find((e) => e.id === id)).filter(Boolean);
+  if (!entities.length) return [];
+  const out = [];
+
+  const blocked = entities.filter((e) => !canRotate(e));
+  if (blocked.length) {
+    const names = [...new Set(blocked.map((e) => ENTITY_LABELS[e.type] || e.type))].join(' and ');
+    out.push(el('div', { class: 'prop-subhead', text: 'Angle' }));
+    out.push(
+      el('p', {
+        class: 'muted small',
+        text: `${names} are stored as an axis-aligned box, so they cannot carry a rotation.`,
+      })
+    );
+    return out;
+  }
+
+  out.push(el('div', { class: 'prop-subhead', text: 'Angle' }));
+
+  const single = entities.length === 1 ? entities[0] : null;
+  const current = single ? entityAngle(single) : null;
+  if (current !== null) {
+    out.push(
+      field(
+        'Set to',
+        degreeInput(toDegrees(current), (deg) => {
+          setEntityAngle(single, toRadians(deg), app.page);
+          app.touch('Set angle');
+          app.refreshAll();
+          app.render();
+        }),
+        single.type === 'fixture' || single.type === 'text'
+          ? 'degrees, clockwise from east'
+          : 'degrees, measured from the start end'
+      )
+    );
+  }
+
+  // Turning by an amount works for anything, including a mixed selection.
+  out.push(
+    field(
+      'Turn by',
+      degreeInput(0, (deg) => {
+        if (!deg) return;
+        app.rotateSelection(deg, { absolute: false });
+        app.render();
+      }),
+      'degrees about the selection centre'
+    )
+  );
+  out.push(
+    el('div', { class: 'panel-actions' }, [
+      el('button', {
+        class: 'btn tiny',
+        text: '↺ 90°',
+        onclick: () => {
+          app.rotateSelection(-90, { absolute: false });
+          app.render();
+        },
+      }),
+      el('button', {
+        class: 'btn tiny',
+        text: '↻ 90°',
+        onclick: () => {
+          app.rotateSelection(90, { absolute: false });
+          app.render();
+        },
+      }),
+    ])
+  );
+  return out;
+}
+
+/** A degrees box that commits on Enter or blur and resets if it can't parse. */
+function degreeInput(value, onCommit) {
+  const input = el('input', {
+    type: 'text',
+    class: 'dim',
+    value: `${Number(value.toFixed(2))}°`,
+    inputmode: 'decimal',
+  });
+  const commit = () => {
+    const parsed = parseAngle(input.value) || parseAngle(`${input.value}°`);
+    if (parsed) {
+      onCommit(parsed.degrees);
+      input.value = `${Number(parsed.degrees.toFixed(2))}°`;
+    } else {
+      input.value = `${Number(value.toFixed(2))}°`;
+    }
+  };
+  input.addEventListener('change', commit);
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter') {
+      commit();
+      input.blur();
+    }
+  });
+  return input;
 }
 
 export function renderProperties(app, container) {
@@ -745,6 +858,8 @@ export function renderProperties(app, container) {
     if (summary) container.appendChild(el('p', { class: 'muted small mono', text: summary }));
     for (const node of entityEditor(app, ent)) container.appendChild(node);
   }
+
+  for (const node of rotationEditor(app, ids)) container.appendChild(node);
 
   container.appendChild(
     el('div', { class: 'panel-actions' }, [

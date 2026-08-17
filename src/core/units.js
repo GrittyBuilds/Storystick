@@ -158,6 +158,45 @@ export function formatAngle(radians) {
   return `${deg.toFixed(1)}°`;
 }
 
+/** Degrees to radians and back, so no caller writes the conversion by hand. */
+export const toRadians = (degrees) => (degrees * Math.PI) / 180;
+export const toDegrees = (radians) => (radians * 180) / Math.PI;
+
+/** Degrees in 0–360, which is how a bearing is read off a drawing. */
+export function normalizeDegrees(degrees) {
+  if (!Number.isFinite(degrees)) return 0;
+  return ((degrees % 360) + 360) % 360;
+}
+
+/**
+ * An angle typed by the user.
+ *
+ * Angles have to say they are angles: bare `45` is a length, and reading it as
+ * a bearing would rotate a wall when somebody meant to move it 45 inches. The
+ * markers are a degree sign, `deg`/`d`, or AutoCAD's leading `<`.
+ *
+ * A leading sign means *relative*: `<+15` turns fifteen degrees further,
+ * `<45` points at forty-five. Nothing is lost by spending the sign this way —
+ * an absolute -30° is the same bearing as 330°.
+ *
+ * @returns {{ degrees: number, relative: boolean } | null}
+ */
+export function parseAngle(text) {
+  const s = String(text ?? '').trim().toLowerCase();
+  if (!s) return null;
+  const m = s.match(/^(<)?\s*([+-])?\s*(\d+(?:\.\d+)?)\s*(°|deg(?:rees)?|d)?$/);
+  if (!m) return null;
+  const [, caret, sign, digits, suffix] = m;
+  // Without a marker it is a length, not an angle.
+  if (!caret && !suffix) return null;
+  const value = Number(digits);
+  if (!Number.isFinite(value)) return null;
+  return {
+    degrees: sign === '-' ? -value : value,
+    relative: Boolean(sign),
+  };
+}
+
 /** Sensible default grid spacing in inches for a unit system. */
 export function defaultGrid(system) {
   return system === 'metric' ? mmToIn(100) : 6;
