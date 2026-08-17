@@ -109,8 +109,16 @@ export class App {
       door: { width: 32, height: 80, swing: 'left' },
       window: { width: 36, height: 48, sill: 36 },
       part: { material: 'ply-3/4', thickness: 0.75, qty: 1 },
+      roof: { pitch: 6, eaveHeight: 96, overhang: 12 },
+      footing: { width: 16, thickness: 8, depthBelowGrade: 42 },
+      pad: { width: 24, length: 24, thickness: 10 },
+      slab: { thickness: 4, topElevation: 0, reinforcement: '6x6 W1.4/W1.4 WWM' },
+      beam: { size: '2x10', plies: 3, material: 'spf-2x6' },
       textSize: 6,
     };
+
+    // The symbol the Symbol tool will place. One tool, many symbols.
+    this.activeSymbolId = 'e-recep';
 
     this.tools = new Map();
     for (const entry of TOOL_ENTRIES) this.tools.set(entry.Tool.id, new entry.Tool(this));
@@ -265,10 +273,37 @@ export class App {
       part: 'parts',
       dim: 'dimensions',
       text: 'notes',
+      roofPlane: 'roof',
+      footing: 'footings',
+      slab: 'slab',
+      beam: 'structure',
+      fixture: 'furniture',
     };
     const wanted = map[kind];
     if (wanted && this.project.layers.some((l) => l.id === wanted)) return wanted;
     return this.project.activeLayerId;
+  }
+
+  nextBeamNumber() {
+    return (
+      this.project.pages.reduce((n, p) => n + p.entities.filter((e) => e.type === 'beam').length, 0) + 1
+    );
+  }
+
+  nextFixtureTag(prefix) {
+    const count = this.project.pages.reduce(
+      (n, p) =>
+        n +
+        p.entities.filter((e) => e.type === 'fixture' && String(e.tag || '').startsWith(prefix)).length,
+      0
+    );
+    return count + 1;
+  }
+
+  setActiveSymbol(id) {
+    this.activeSymbolId = id;
+    this.setTool('fixture');
+    this.refreshProperties();
   }
 
   nextPartNumber() {

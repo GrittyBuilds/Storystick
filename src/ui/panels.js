@@ -12,6 +12,57 @@ import {
 } from '../core/entities.js';
 import { layerColor } from '../render/theme.js';
 import * as g from '../core/geometry.js';
+import {
+  ASSEMBLY_LIST,
+  getAssembly,
+  assemblyThickness,
+  FINISH_SLOTS,
+  DEFAULT_FINISHES,
+} from '../core/assemblies.js';
+import { getSymbol, symbolsFor, layerForSymbol } from '../symbols/library.js';
+
+/** Finishes offered by slot — free text still wins if something else is typed. */
+const FINISH_OPTIONS = {
+  floor: [
+    'Carpet',
+    'Luxury vinyl plank',
+    'Sheet vinyl',
+    'Ceramic tile',
+    'Hardwood',
+    'Engineered wood',
+    'Sealed concrete',
+    'Epoxy',
+  ],
+  base: ['Painted wood base', 'Stained wood base', 'Vinyl cove base', 'Tile base', 'None'],
+  walls: [
+    'Painted gypsum board',
+    '5/8" type X gypsum board, painted',
+    'Ceramic tile',
+    'Tile wainscot',
+    'Exposed concrete',
+    'Wood paneling',
+    'Unfinished',
+  ],
+  ceiling: [
+    'Painted gypsum board',
+    'Textured gypsum board',
+    'Suspended acoustic tile',
+    'Exposed framing',
+    'Unfinished',
+  ],
+};
+
+/** Human note describing what an assembly is made of. */
+function assemblyNote(project, id) {
+  const assembly = getAssembly(project, id);
+  if (!assembly) return '';
+  return `${assembly.layers.length} layers · ${assemblyThickness(assembly)}" total`;
+}
+
+/** Pitch as an angle, because a framer setting a saw wants degrees. */
+function slopeAngle(pitch) {
+  return `${((Math.atan2(Number(pitch) || 0, 12) * 180) / Math.PI).toFixed(1)}°`;
+}
 
 const ICONS = {
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -26,10 +77,15 @@ function lengthInput(app, value, onCommit, opts = {}) {
   const sys = app.project.unitSystem;
   const input = el('input', { type: 'text', class: 'dim', value: formatLength(value, sys, opts) });
   const commit = () => {
-    const parsed = parseLength(input.value, sys);
-    if (parsed !== null && (opts.allowZero || parsed > 0)) {
-      onCommit(parsed);
-      input.value = formatLength(parsed, sys, opts);
+    // A slab under a basement sits at a negative elevation, so the minus sign
+    // has to survive the round trip.
+    const raw = input.value.trim();
+    const negative = opts.allowNegative && raw.startsWith('-');
+    const parsed = parseLength(negative ? raw.slice(1) : raw, sys);
+    const signed = parsed === null ? null : negative ? -parsed : parsed;
+    if (signed !== null && (opts.allowZero || Math.abs(signed) > 0)) {
+      onCommit(signed);
+      input.value = formatLength(signed, sys, opts);
     } else {
       input.value = formatLength(value, sys, opts);
     }
@@ -189,11 +245,36 @@ function entityEditor(app, ent) {
   );
 
   switch (ent.type) {
-    case 'wall':
+    case 'wall': {
+      // Picking an assembly sets the drawn thickness from its real layers, so
+      // the plan, the poché, the drywall count and the wall never disagree.
+      const assemblies = [{ value: '', label: 'None — thickness only' }].concat(
+        ASSEMBLY_LIST.map((a) => ({ value: a.id, label: a.name }))
+      );
+      fields.push(
+        field(
+          'Assembly',
+          select(assemblies, ent.assembly || '', (v) => {
+            ent.assembly = v || null;
+            const assembly = v ? getAssembly(app.project, v) : null;
+            if (assembly) ent.thickness = assemblyThickness(assembly);
+            change('Change wall assembly');
+            app.refreshAll();
+          }),
+          ent.assembly ? assemblyNote(app.project, ent.assembly) : 'Drives thickness, poché and takeoff'
+        )
+      );
       fields.push(
         field('Thickness', lengthInput(app, ent.thickness, (v) => {
           ent.thickness = v;
+          ent.assembly = null;
           change('Change wall thickness');
+        }))
+      );
+      fields.push(
+        field('Height', lengthInput(app, ent.height ?? 96, (v) => {
+          ent.height = v;
+          change('Change wall height');
         }))
       );
       fields.push(
@@ -212,6 +293,163 @@ function entityEditor(app, ent) {
         )
       );
       break;
+    }
+
+    case 'roofPlane':
+      fields.push(
+        field(
+          'Pitch',
+          numberInput(ent.pitch, (v) => {
+            ent.pitch = Math.max(0, v);
+            change('Change roof pitch');
+          }, { step: 0.5, min: 0 }),
+          `rise per 12 of run · ${slopeAngle(ent.pitch)}`
+        )
+      );
+      fields.push(
+        field('Eave height', lengthInput(app, ent.eaveHeight, (v) => {
+          ent.eaveHeight = v;
+          change('Change eave height');
+        }, { allowZero: true }))
+      );
+      fields.push(
+        field('Overhang', lengthInput(app, ent.overhang, (v) => {
+          ent.overhang = v;
+          change('Change overhang');
+        }, { allowZero: true }))
+      );
+      fields.push(
+        field(
+          'Eave edge',
+          select(
+            ent.pts.map((_, i) => ({ value: String(i), label: `Edge ${i + 1}` })),
+            String(ent.eave || 0),
+            (v) => {
+              ent.eave = Number(v);
+              change('Change eave edge');
+            }
+          ),
+          'The low edge the slope runs up from'
+        )
+      );
+      break;
+
+    case 'footing':
+      fields.push(
+        field('Width', lengthInput(app, ent.width, (v) => {
+          ent.width = v;
+          change('Change footing width');
+        }))
+      );
+      fields.push(
+        field('Thickness', lengthInput(app, ent.thickness, (v) => {
+          ent.thickness = v;
+          change('Change footing thickness');
+        }))
+      );
+      if (ent.kind === 'pad') {
+        fields.push(
+          field('Length', lengthInput(app, ent.length || ent.width, (v) => {
+            ent.length = v;
+            change('Change footing length');
+          }))
+        );
+      }
+      fields.push(
+        field(
+          'Depth below grade',
+          lengthInput(app, ent.depthBelowGrade, (v) => {
+            ent.depthBelowGrade = v;
+            change('Change footing depth');
+          }, { allowZero: true }),
+          'Checked against the frost depth requirement'
+        )
+      );
+      break;
+
+    case 'slab':
+      fields.push(
+        field('Thickness', lengthInput(app, ent.thickness, (v) => {
+          ent.thickness = v;
+          change('Change slab thickness');
+        }))
+      );
+      fields.push(
+        field('Top elevation', lengthInput(app, ent.topElevation, (v) => {
+          ent.topElevation = v;
+          change('Change slab elevation');
+        }, { allowZero: true, allowNegative: true }))
+      );
+      fields.push(
+        field('Reinforcement', textInput(ent.reinforcement || '', (v) => {
+          ent.reinforcement = v;
+          change('Change reinforcement');
+        }))
+      );
+      break;
+
+    case 'beam':
+      fields.push(field('Tag', textInput(ent.tag || '', (v) => { ent.tag = v; change('Tag beam'); })));
+      fields.push(
+        field('Size', textInput(ent.size || '2x10', (v) => {
+          ent.size = v || '2x10';
+          change('Change beam size');
+          app.refreshAll();
+        }), 'e.g. 2x10, 4x8')
+      );
+      fields.push(
+        field('Plies', numberInput(ent.plies || 1, (v) => {
+          ent.plies = Math.max(1, Math.round(v));
+          change('Change ply count');
+        }, { step: 1, min: 1, max: 6 }))
+      );
+      fields.push(
+        field('Elevation', lengthInput(app, ent.elevation ?? 0, (v) => {
+          ent.elevation = v;
+          change('Change beam elevation');
+        }, { allowZero: true, allowNegative: true }))
+      );
+      break;
+
+    case 'fixture': {
+      const symbol = getSymbol(ent.symbol);
+      fields.push(
+        field(
+          'Symbol',
+          select(
+            symbolsFor(symbol ? symbol.discipline : 'electrical').map((s) => ({
+              value: s.id,
+              label: s.name,
+            })),
+            ent.symbol,
+            (v) => {
+              ent.symbol = v;
+              ent.layer = layerForSymbol(v);
+              change('Change symbol');
+              app.refreshAll();
+            }
+          )
+        )
+      );
+      fields.push(field('Tag', textInput(ent.tag || '', (v) => { ent.tag = v; change('Tag fixture'); })));
+      fields.push(
+        field('Rotation', numberInput(Math.round(((ent.rot || 0) * 180) / Math.PI), (v) => {
+          ent.rot = (v * Math.PI) / 180;
+          change('Rotate fixture');
+        }, { step: 15 }), 'degrees')
+      );
+      fields.push(
+        el('button', {
+          class: 'btn tiny',
+          text: ent.mirrored ? 'Unflip' : 'Flip',
+          onclick: () => {
+            ent.mirrored = !ent.mirrored;
+            change('Flip fixture');
+          },
+        })
+      );
+      break;
+    }
 
     case 'opening': {
       const host = findEntity(app.page, ent.host);
@@ -351,7 +589,7 @@ function entityEditor(app, ent) {
       break;
     }
 
-    case 'room':
+    case 'room': {
       fields.push(field('Name', textInput(ent.name, (v) => { ent.name = v || 'Room'; change('Rename room'); })));
       fields.push(
         field(
@@ -367,7 +605,49 @@ function entityEditor(app, ent) {
           'Code checks key off this'
         )
       );
+
+      // Finishes. What goes on the floor, the base, the walls and the ceiling
+      // is half of what a build plan is for, and it is what the finish schedule
+      // reads back out.
+      const finishes = ent.finishes || (ent.finishes = { ...DEFAULT_FINISHES });
+      fields.push(el('div', { class: 'prop-subhead', text: 'Finishes' }));
+      for (const slot of FINISH_SLOTS) {
+        const options = [{ value: '', label: '—' }]
+          .concat((FINISH_OPTIONS[slot] || []).map((f) => ({ value: f, label: f })))
+          .concat(
+            finishes[slot] && !(FINISH_OPTIONS[slot] || []).includes(finishes[slot])
+              ? [{ value: finishes[slot], label: finishes[slot] }]
+              : []
+          );
+        fields.push(
+          field(
+            slot.charAt(0).toUpperCase() + slot.slice(1),
+            select(options, finishes[slot] || '', (v) => {
+              finishes[slot] = v;
+              change('Change room finish');
+              app.refreshAll();
+            })
+          )
+        );
+      }
+      fields.push(
+        field(
+          'Ceiling height',
+          lengthInput(app, finishes.ceilingHeight ?? 96, (v) => {
+            finishes.ceilingHeight = v;
+            change('Change ceiling height');
+            app.refreshAll();
+          })
+        )
+      );
+      fields.push(
+        field('Finish notes', textInput(finishes.notes || '', (v) => {
+          finishes.notes = v;
+          change('Edit finish notes');
+        }))
+      );
       break;
+    }
 
     case 'text':
       fields.push(field('Text', textInput(ent.text, (v) => { ent.text = v; change('Edit text'); })));

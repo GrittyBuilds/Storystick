@@ -7,7 +7,18 @@
 
 import * as g from '../core/geometry.js';
 import { formatLength, formatArea, IN_PER_FT, mmToIn } from '../core/units.js';
-import { outlines, wallSpans, openingFrame, wallLength, handlesOf } from '../core/entities.js';
+import {
+  outlines,
+  wallSpans,
+  openingFrame,
+  wallLength,
+  handlesOf,
+  roofEaveEdge,
+  beamWidth,
+} from '../core/entities.js';
+import { getSymbol } from '../symbols/library.js';
+import { drawSymbolCanvas } from '../symbols/render.js';
+import { basePageOf } from '../core/document.js';
 import {
   palette,
   layerColor,
@@ -21,15 +32,20 @@ import {
 const RICH_PREVIEW = new Set(['wall', 'opening', 'dim', 'part', 'room']);
 
 const Z_ORDER = {
+  slab: -1,
+  footing: -0.5,
   room: 0,
+  roofPlane: 0.5,
   part: 1,
   rect: 2,
   circle: 2,
   arc: 2,
   polyline: 2,
   line: 2,
+  beam: 2.5,
   wall: 3,
   opening: 4,
+  fixture: 4.5,
   dim: 5,
   text: 6,
 };
@@ -90,6 +106,7 @@ export class Renderer {
     ctx.lineCap = 'butt';
 
     this.drawGrid(state);
+    this.drawBasePage(state);
     this.drawEntities(state);
     this.drawSelection(state);
     this.drawPreview(state);
@@ -207,6 +224,39 @@ export class Renderer {
 
   // --- entities ---------------------------------------------------------
 
+  /**
+   * The plan a discipline sheet traces over, drawn faint and flat so the work
+   * on this sheet reads as the subject and the walls read as context.
+   */
+  drawBasePage(state) {
+    const { ctx } = this;
+    const base = basePageOf(state.project, state.page);
+    if (!base) return;
+    ctx.save();
+    ctx.globalAlpha = 0.4;
+    const layers = new Map(state.project.layers.map((l) => [l.id, l]));
+    const substate = { ...state, page: base };
+    const visible = base.entities
+      .filter((e) => {
+        const layer = layers.get(e.layer);
+        return !layer || layer.visible;
+      })
+      .sort((a, b) => (Z_ORDER[a.type] ?? 2) - (Z_ORDER[b.type] ?? 2));
+    for (const ent of visible) {
+      if (ent.type === 'wall') this.drawWall(ent, substate, layers, 'fill');
+    }
+    for (const ent of visible) {
+      const layer = layers.get(ent.layer) || {
+        color: '#46525E',
+        weight: LINE_WEIGHT_MM.surface,
+        dash: null,
+      };
+      if (ent.type === 'wall') this.drawWall(ent, substate, layers, 'stroke');
+      else this.drawEntity(ent, substate, layer);
+    }
+    ctx.restore();
+  }
+
   drawEntities(state) {
     const { project, page } = state;
     const layers = new Map(project.layers.map((l) => [l.id, l]));
@@ -316,6 +366,35 @@ export class Renderer {
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(ent.text, 0, 0);
         ctx.restore();
+        break;
+      }
+      case 'roofPlane': {
+        this.drawRoofPlane(ent, state, style, layer);
+        break;
+      }
+      case 'slab': {
+        this.path(ent.pts, true);
+        ctx.fillStyle = this.pal.slabFill;
+        ctx.fill();
+        this.applyStroke(vp, style.color, layer.weight, style.dash);
+        ctx.stroke();
+        break;
+      }
+      case 'beam': {
+        this.path(g.thickSegmentQuad(ent.a, ent.b, beamWidth(ent)), true);
+        this.applyStroke(vp, style.color, layer.weight, [10, 5]);
+        ctx.stroke();
+        this.rotatedLabel(
+          vp,
+          g.lerp(ent.a, ent.b, 0.5),
+          g.angleOf(g.sub(ent.b, ent.a)),
+          `${ent.plies > 1 ? `(${ent.plies}) ` : ''}${ent.size}${ent.tag ? ` ${ent.tag}` : ''}`,
+          style.color
+        );
+        break;
+      }
+      case 'fixture': {
+        this.drawFixture(ent, state, style, layer);
         break;
       }
       default: {
@@ -446,6 +525,85 @@ export class Renderer {
    * Screen-constant label centred on a model point: the name is prose (Inter),
    * the measurement is exact (IBM Plex Mono).
    */
+  /**
+   * A roof plane reads as an outline with a heavy eave edge and an arrow up the
+   * slope — the eave is the only edge whose position a framer can set a ladder
+   * against, so it gets the weight.
+   */
+  drawRoofPlane(ent, state, style, layer) {
+    const { ctx } = this;
+    const { viewport: vp } = state;
+    this.path(ent.pts, true);
+    this.applyStroke(vp, style.color, layer.weight, style.dash);
+    ctx.stroke();
+
+    const [ea, eb] = roofEaveEdge(ent);
+    ctx.beginPath();
+    ctx.moveTo(ea.x, ea.y);
+    ctx.lineTo(eb.x, eb.y);
+    this.applyStroke(vp, style.color, layer.weight * 2, null);
+    ctx.stroke();
+
+    const centre = g.polygonCentroid(ent.pts);
+    const edge = g.sub(eb, ea);
+    const len = g.len(edge) || 1;
+    const inward = Math.sign(g.cross(edge, g.sub(centre, ea)) / len) || 1;
+    const up = g.mul(g.norm(g.perp(edge)), inward);
+    const reach = Math.min(len * 0.3, 24);
+    const tail = g.add(centre, g.mul(up, -reach));
+    const head = g.add(centre, g.mul(up, reach));
+    ctx.beginPath();
+    ctx.moveTo(tail.x, tail.y);
+    ctx.lineTo(head.x, head.y);
+    const ang = g.angleOf(g.sub(head, tail));
+    for (const s of [2.6, -2.6]) {
+      ctx.moveTo(head.x, head.y);
+      ctx.lineTo(head.x + Math.cos(ang + s) * reach * 0.22, head.y + Math.sin(ang + s) * reach * 0.22);
+    }
+    this.applyStroke(vp, style.color, layer.weight, null);
+    ctx.stroke();
+    this.label(vp, g.add(centre, g.mul(up, reach * 1.6)), null, `${ent.pitch}:12`, style.color);
+  }
+
+  drawFixture(ent, state, style, layer) {
+    const { ctx } = this;
+    const { viewport: vp } = state;
+    const symbol = getSymbol(ent.symbol);
+    if (!symbol) {
+      // An unknown symbol still marks its spot rather than vanishing silently.
+      ctx.beginPath();
+      ctx.arc(ent.p.x, ent.p.y, vp.px(5), 0, Math.PI * 2);
+      this.applyStroke(vp, style.color, layer.weight, [4, 3]);
+      ctx.stroke();
+      return;
+    }
+    drawSymbolCanvas(ctx, symbol, ent, vp, {
+      color: style.color,
+      weight: Math.max(0.5, mmToPx(layer.weight || LINE_WEIGHT_MM.surface)),
+      font: FONT_SANS,
+      textColor: style.color,
+    });
+    if (ent.tag) {
+      const above = g.vec(ent.p.x, ent.p.y - (symbol.heightIn || 12) * 0.75);
+      this.label(vp, above, null, ent.tag, style.color);
+    }
+  }
+
+  rotatedLabel(vp, at, angle, value, color) {
+    const { ctx } = this;
+    let a = angle;
+    if (a > Math.PI / 2 || a < -Math.PI / 2) a += Math.PI;
+    ctx.save();
+    ctx.translate(at.x, at.y);
+    ctx.rotate(a);
+    ctx.font = `400 ${vp.px(DIM_TEXT_PX)}px ${FONT_MONO}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = color;
+    ctx.fillText(value, 0, -vp.px(3));
+    ctx.restore();
+  }
+
   label(vp, at, name, value, color) {
     const { ctx } = this;
     const size = vp.px(LABEL_TEXT_PX);

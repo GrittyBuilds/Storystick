@@ -4,6 +4,7 @@ import { uid } from './entities.js';
 import { defaultGrid } from './units.js';
 import { createJurisdiction } from '../codes/jurisdiction.js';
 import { createSpeciesTable } from '../engineering/species.js';
+import { createAssemblies, DEFAULT_FINISHES } from './assemblies.js';
 
 export const FILE_VERSION = 2;
 
@@ -21,6 +22,14 @@ export const DEFAULT_LAYERS = [
   { id: 'dimensions', name: 'Dimensions', color: '#1B5FA6', colorDark: '#3E86CE', weight: 0.25, dash: null },
   { id: 'notes', name: 'Notes & Text', color: '#46525E', colorDark: '#A9C7E5', weight: 0.25, dash: null },
   { id: 'sketch', name: 'Sketch', color: '#8A97A3', colorDark: '#5E7A97', weight: 0.18, dash: [4, 4] },
+  { id: 'foundation', name: 'Foundation', color: '#0F2338', colorDark: '#A9C7E5', weight: 0.7, dash: null },
+  { id: 'footings', name: 'Footings', color: '#65717C', colorDark: '#7E9BB8', weight: 0.35, dash: [10, 4] },
+  { id: 'slab', name: 'Slabs', color: '#8A97A3', colorDark: '#5E7A97', weight: 0.25, dash: null },
+  { id: 'structure', name: 'Beams & Posts', color: '#46525E', colorDark: '#A9C7E5', weight: 0.5, dash: null },
+  { id: 'roof', name: 'Roof', color: '#46525E', colorDark: '#7E9BB8', weight: 0.5, dash: null },
+  { id: 'electrical', name: 'Electrical', color: '#1B5FA6', colorDark: '#3E86CE', weight: 0.35, dash: null },
+  { id: 'plumbing', name: 'Plumbing', color: '#177C54', colorDark: '#1F9D6B', weight: 0.35, dash: null },
+  { id: 'mechanical', name: 'Mechanical', color: '#9E5813', colorDark: '#EFA860', weight: 0.35, dash: null },
 ];
 
 const DEFAULT_LAYER_WEIGHTS = new Map(DEFAULT_LAYERS.map((l) => [l.id, l.weight]));
@@ -40,10 +49,59 @@ export const DEFAULT_MATERIALS = [
   { id: 'deck-54x6-16', name: '5/4x6 Decking — 16 ft', form: 'board', thickness: 1, stockW: 5.5, stockL: 192, cost: 23 },
 ];
 
-export const PAGE_KINDS = ['plan', 'elevation', 'section', 'detail', 'layout'];
+export const PAGE_KINDS = [
+  'plan',
+  'foundation',
+  'framing',
+  'electrical',
+  'plumbing',
+  'mechanical',
+  'roof',
+  'elevation',
+  'section',
+  'detail',
+  'site',
+  'layout',
+];
 
-export function makePage(name, kind = 'plan') {
-  return { id: uid('pg'), name, kind, scale: '1/4" = 1\'-0"', entities: [] };
+/** Discipline prefix a sheet number takes, by sheet kind. */
+export const SHEET_PREFIX = {
+  plan: 'A',
+  elevation: 'A',
+  section: 'A',
+  detail: 'A',
+  layout: 'A',
+  roof: 'A',
+  site: 'C',
+  foundation: 'S',
+  framing: 'S',
+  electrical: 'E',
+  plumbing: 'P',
+  mechanical: 'M',
+};
+
+export function makePage(name, kind = 'plan', opts = {}) {
+  return {
+    id: uid('pg'),
+    name,
+    kind,
+    scale: opts.scale || '1/4" = 1\'-0"',
+    sheetNumber: opts.sheetNumber || '',
+    // A discipline sheet draws another sheet's plan underneath in background
+    // weight rather than owning a copy of it. An electrician's sheet and the
+    // architect's sheet then cannot disagree about where a wall is, because
+    // there is only one wall.
+    basePageId: opts.basePageId || null,
+    entities: [],
+    notes: opts.notes || [],
+  };
+}
+
+/** The page a sheet traces over, if any. */
+export function basePageOf(project, page) {
+  if (!page || !page.basePageId) return null;
+  const base = project.pages.find((p) => p.id === page.basePageId);
+  return base && base.id !== page.id ? base : null;
 }
 
 export function createProject(options = {}) {
@@ -69,6 +127,14 @@ export function createProject(options = {}) {
     // are jurisdiction- and material-specific and must be confirmed by the user.
     jurisdiction: createJurisdiction(),
     speciesValues: createSpeciesTable(),
+    assemblies: createAssemblies(),
+    sheet: {
+      size: 'ARCH-D',
+      orientation: 'landscape',
+      titleBlock: 'right',
+      autoScale: true,
+      showGrid: false,
+    },
     layers: DEFAULT_LAYERS.map((l) => ({ ...l, visible: true, locked: false })),
     materials: DEFAULT_MATERIALS.map((m) => ({ ...m })),
     pages,
@@ -182,6 +248,11 @@ const KNOWN_TYPES = new Set([
   'text',
   'room',
   'part',
+  'fixture',
+  'roofPlane',
+  'footing',
+  'slab',
+  'beam',
 ]);
 
 const isPoint = (p) => !!p && Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -197,9 +268,41 @@ function sanitizeEntity(raw, layerIds) {
   if ((ent.type === 'circle' || ent.type === 'arc') && (!isPoint(ent.c) || !Number.isFinite(ent.r))) {
     return null;
   }
-  if (ent.type === 'polyline' || ent.type === 'room') {
-    if (!Array.isArray(ent.pts) || ent.pts.length < 2 || !ent.pts.every(isPoint)) return null;
+  if (['polyline', 'room', 'slab', 'roofPlane'].includes(ent.type)) {
+    const minimum = ent.type === 'polyline' ? 2 : 3;
+    if (!Array.isArray(ent.pts) || ent.pts.length < minimum || !ent.pts.every(isPoint)) return null;
     ent.pts = ent.pts.map((p) => ({ x: p.x, y: p.y }));
+  }
+  if (ent.type === 'fixture') {
+    if (!isPoint(ent.p) || typeof ent.symbol !== 'string') return null;
+    ent.rot = Number.isFinite(ent.rot) ? ent.rot : 0;
+    ent.scale = Number.isFinite(ent.scale) && ent.scale > 0 ? ent.scale : 1;
+    ent.discipline = typeof ent.discipline === 'string' ? ent.discipline : 'architectural';
+    ent.tag = String(ent.tag ?? '');
+  }
+  if (ent.type === 'roofPlane') {
+    ent.pitch = Number.isFinite(ent.pitch) ? Math.max(0, ent.pitch) : 6;
+    ent.eaveHeight = Number.isFinite(ent.eaveHeight) ? ent.eaveHeight : 96;
+    ent.eave = Number.isInteger(ent.eave) ? Math.max(0, Math.min(ent.eave, ent.pts.length - 1)) : 0;
+    ent.overhang = Number.isFinite(ent.overhang) ? ent.overhang : 0;
+  }
+  if (ent.type === 'slab') {
+    ent.thickness = Number.isFinite(ent.thickness) && ent.thickness > 0 ? ent.thickness : 4;
+    ent.topElevation = Number.isFinite(ent.topElevation) ? ent.topElevation : 0;
+    ent.name = String(ent.name ?? 'Slab');
+  }
+  if (ent.type === 'footing') {
+    if (!isPoint(ent.a) || !isPoint(ent.b)) return null;
+    ent.width = Number.isFinite(ent.width) && ent.width > 0 ? ent.width : 20;
+    ent.thickness = Number.isFinite(ent.thickness) && ent.thickness > 0 ? ent.thickness : 10;
+    ent.kind = ent.kind === 'pad' ? 'pad' : 'continuous';
+    if (ent.kind === 'pad') ent.length = Number.isFinite(ent.length) ? ent.length : ent.width;
+  }
+  if (ent.type === 'beam') {
+    if (!isPoint(ent.a) || !isPoint(ent.b)) return null;
+    ent.size = String(ent.size ?? '2x10');
+    ent.plies = Number.isInteger(ent.plies) && ent.plies > 0 ? ent.plies : 2;
+    ent.elevation = Number.isFinite(ent.elevation) ? ent.elevation : 96;
   }
   if (ent.type === 'text') {
     if (!isPoint(ent.p)) return null;
@@ -227,7 +330,12 @@ function sanitizeEntity(raw, layerIds) {
   if (ent.type === 'room') {
     ent.name = String(ent.name ?? 'Room');
     ent.use = typeof ent.use === 'string' ? ent.use : 'other';
+    ent.finishes =
+      ent.finishes && typeof ent.finishes === 'object'
+        ? { ...DEFAULT_FINISHES, ...ent.finishes }
+        : { ...DEFAULT_FINISHES };
   }
+  if (ent.type === 'wall' && typeof ent.assembly !== 'string') ent.assembly = null;
   return ent;
 }
 
@@ -253,6 +361,7 @@ export function normalizeProject(raw) {
     if (typeof raw[key] === 'boolean') project[key] = raw[key];
   }
   if (typeof raw.kind === 'string') project.kind = raw.kind;
+  if (raw.sheet && typeof raw.sheet === 'object') project.sheet = { ...project.sheet, ...raw.sheet };
   if (raw.meta && typeof raw.meta === 'object') project.meta = { ...base.meta, ...raw.meta };
 
   // Confirmed code values and design values survive a round trip, but only the
@@ -346,11 +455,23 @@ export function normalizeProject(raw) {
       name: String(p.name ?? 'Sheet'),
       kind: PAGE_KINDS.includes(p.kind) ? p.kind : 'plan',
       scale: String(p.scale ?? '1/4" = 1\'-0"'),
+      sheetNumber: String(p.sheetNumber ?? ''),
+      basePageId: typeof p.basePageId === 'string' && p.basePageId ? p.basePageId : null,
+      notes: Array.isArray(p.notes) ? p.notes.map(String) : [],
       entities: (Array.isArray(p.entities) ? p.entities : [])
         .map((e) => sanitizeEntity(e, layerIds))
         .filter(Boolean),
     }));
   if (!project.pages.length) project.pages = [makePage('Floor Plan', 'plan')];
+
+  // A base-page reference that points at a deleted sheet, or at itself, would
+  // either draw nothing or recurse; drop it rather than carry a broken link.
+  const pageIds = new Set(project.pages.map((p) => p.id));
+  for (const page of project.pages) {
+    if (page.basePageId && (page.basePageId === page.id || !pageIds.has(page.basePageId))) {
+      page.basePageId = null;
+    }
+  }
 
   // Drop openings whose host wall vanished.
   for (const page of project.pages) {

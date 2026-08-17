@@ -4,6 +4,8 @@ import { el, clear, field, select, numberInput } from './dom.js';
 import { TOOL_GROUPS } from '../tools/index.js';
 import { formatLength, parseLength } from '../core/units.js';
 import { WALL_STATUS } from '../core/entities.js';
+import { getSymbol, symbolsFor, SYMBOL_GROUPS } from '../symbols/library.js';
+import { symbolPreviewSvg } from '../symbols/render.js';
 
 export function renderToolbar(app, container) {
   clear(container);
@@ -25,12 +27,12 @@ export function renderToolbar(app, container) {
   }
 }
 
-function lengthControl(app, value, onCommit) {
+function lengthControl(app, value, onCommit, allowZero = false) {
   const sys = app.project.unitSystem;
   const input = el('input', { type: 'text', class: 'mini', value: formatLength(value, sys) });
   const commit = () => {
     const parsed = parseLength(input.value, sys);
-    if (parsed !== null && parsed > 0) {
+    if (parsed !== null && (allowZero || parsed > 0)) {
       onCommit(parsed);
       input.value = formatLength(parsed, sys);
     } else {
@@ -209,7 +211,112 @@ export function renderToolOptions(app, container) {
     );
   } else if (id === 'text') {
     container.appendChild(field('Size', lengthControl(app, d.textSize, (v) => { d.textSize = v; })));
+  } else if (id === 'roof') {
+    container.appendChild(
+      field(
+        'Pitch',
+        select(
+          PITCHES.map((p) => ({ value: String(p), label: `${p}:12` })),
+          String(d.roof.pitch),
+          (v) => {
+            d.roof.pitch = Number(v);
+          }
+        )
+      )
+    );
+    container.appendChild(
+      field('Eave height', lengthControl(app, d.roof.eaveHeight, (v) => { d.roof.eaveHeight = v; }))
+    );
+    container.appendChild(
+      field('Overhang', lengthControl(app, d.roof.overhang, (v) => { d.roof.overhang = v; }))
+    );
+  } else if (id === 'footing') {
+    container.appendChild(field('Width', lengthControl(app, d.footing.width, (v) => { d.footing.width = v; })));
+    container.appendChild(
+      field('Thickness', lengthControl(app, d.footing.thickness, (v) => { d.footing.thickness = v; }))
+    );
+    container.appendChild(
+      field(
+        'Depth below grade',
+        lengthControl(app, d.footing.depthBelowGrade, (v) => {
+          d.footing.depthBelowGrade = v;
+        })
+      )
+    );
+  } else if (id === 'pad') {
+    container.appendChild(field('Width', lengthControl(app, d.pad.width, (v) => { d.pad.width = v; })));
+    container.appendChild(field('Length', lengthControl(app, d.pad.length, (v) => { d.pad.length = v; })));
+    container.appendChild(
+      field('Thickness', lengthControl(app, d.pad.thickness, (v) => { d.pad.thickness = v; }))
+    );
+  } else if (id === 'slab') {
+    container.appendChild(
+      field('Thickness', lengthControl(app, d.slab.thickness, (v) => { d.slab.thickness = v; }))
+    );
+    container.appendChild(
+      field('Top elevation', lengthControl(app, d.slab.topElevation, (v) => { d.slab.topElevation = v; }, true))
+    );
+  } else if (id === 'beam') {
+    container.appendChild(
+      field(
+        'Size',
+        select(
+          BEAM_SIZES.map((s) => ({ value: s, label: s })),
+          d.beam.size,
+          (v) => {
+            d.beam.size = v;
+          }
+        )
+      )
+    );
+    container.appendChild(
+      field('Plies', numberInput(d.beam.plies, (v) => { d.beam.plies = Math.max(1, Math.round(v)); }, { step: 1, min: 1, max: 6 }))
+    );
+  } else if (id === 'fixture') {
+    container.appendChild(symbolPicker(app));
   }
 
   container.appendChild(el('span', { class: 'options-hint', text: app.activeTool.hint() }));
+}
+
+const PITCHES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12];
+const BEAM_SIZES = ['2x6', '2x8', '2x10', '2x12', '4x6', '4x8', '4x10', '4x12', '6x6', '6x8'];
+
+/**
+ * The symbol palette: a discipline chooser and a grid of previews drawn from
+ * the same op lists the plan and the plot use, so what you pick is what prints.
+ */
+function symbolPicker(app) {
+  const active = getSymbol(app.activeSymbolId);
+  const discipline = active ? active.discipline : 'electrical';
+  const wrap = el('div', { class: 'symbol-picker' });
+
+  wrap.appendChild(
+    field(
+      'Discipline',
+      select(
+        SYMBOL_GROUPS.map((g) => ({ value: g.discipline, label: g.label })),
+        discipline,
+        (v) => {
+          const first = symbolsFor(v)[0];
+          if (first) app.setActiveSymbol(first.id);
+        }
+      )
+    )
+  );
+
+  const grid = el('div', { class: 'symbol-grid' });
+  for (const symbol of symbolsFor(discipline)) {
+    grid.appendChild(
+      el('button', {
+        class: `symbol-btn${symbol.id === app.activeSymbolId ? ' active' : ''}`,
+        title: symbol.name,
+        html: symbolPreviewSvg(symbol, 30, 'currentColor'),
+        onclick: () => app.setActiveSymbol(symbol.id),
+      })
+    );
+  }
+  wrap.appendChild(grid);
+  wrap.appendChild(el('span', { class: 'symbol-name', text: active ? active.name : 'No symbol' }));
+  return wrap;
 }

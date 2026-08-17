@@ -21,7 +21,22 @@ export const ENTITY_LABELS = {
   text: 'Text',
   room: 'Room',
   part: 'Part',
+  fixture: 'Fixture',
+  roofPlane: 'Roof plane',
+  footing: 'Footing',
+  slab: 'Slab',
+  beam: 'Beam',
 };
+
+/** Disciplines a sheet and a fixture belong to. */
+export const DISCIPLINES = [
+  'architectural',
+  'structural',
+  'electrical',
+  'plumbing',
+  'mechanical',
+  'foundation',
+];
 
 export const WALL_STATUS = ['new', 'existing', 'demo'];
 
@@ -112,6 +127,104 @@ export function makeRoom(pts, layer, name = 'Room', use = 'other') {
   return { id: uid('rm'), type: 'room', layer, pts: pts.map(g.clone), name, use };
 }
 
+/**
+ * A plan symbol placed in the drawing — a receptacle, a toilet, a furnace, a
+ * post. One entity type covers every discipline; the symbol library supplies
+ * the geometry, so adding a symbol never means adding an entity type.
+ */
+export function makeFixture(symbol, p, layer, opts = {}) {
+  return {
+    id: uid('fx'),
+    type: 'fixture',
+    layer,
+    symbol,
+    p: g.clone(p),
+    rot: opts.rot ?? 0,
+    scale: opts.scale ?? 1,
+    discipline: opts.discipline || 'architectural',
+    tag: opts.tag || '',
+    mirrored: !!opts.mirrored,
+    notes: opts.notes || '',
+  };
+}
+
+/**
+ * One plane of a roof, drawn as its outline in plan.
+ *
+ * `eave` is the index of the outline edge that sits at the low side; the plane
+ * rises from there at `pitch` rise per 12 of run. Height at any point is
+ * eaveHeight + pitch/12 x (perpendicular distance from the eave line). Gables,
+ * hips, sheds and dormers are all just several of these.
+ */
+export function makeRoofPlane(pts, layer, opts = {}) {
+  return {
+    id: uid('rf'),
+    type: 'roofPlane',
+    layer,
+    pts: pts.map(g.clone),
+    eave: opts.eave ?? 0,
+    pitch: opts.pitch ?? 6,
+    eaveHeight: opts.eaveHeight ?? 96,
+    overhang: opts.overhang ?? 0,
+    name: opts.name || '',
+  };
+}
+
+/** Continuous footing under a wall, or a pad footing under a post. */
+export function makeFooting(a, b, layer, opts = {}) {
+  return {
+    id: uid('ft'),
+    type: 'footing',
+    layer,
+    a: g.clone(a),
+    b: g.clone(b),
+    width: opts.width ?? 20,
+    thickness: opts.thickness ?? 10,
+    depthBelowGrade: opts.depthBelowGrade ?? 42,
+    kind: opts.kind || 'continuous',
+    notes: opts.notes || '',
+  };
+}
+
+/** A pad footing is a footing whose two ends coincide. */
+export function makePadFooting(p, layer, opts = {}) {
+  const footing = makeFooting(p, p, layer, { ...opts, kind: 'pad' });
+  footing.length = opts.length ?? opts.width ?? 24;
+  return footing;
+}
+
+/** A concrete slab: basement floor, garage floor, patio. */
+export function makeSlab(pts, layer, opts = {}) {
+  return {
+    id: uid('sl'),
+    type: 'slab',
+    layer,
+    pts: pts.map(g.clone),
+    thickness: opts.thickness ?? 4,
+    topElevation: opts.topElevation ?? 0,
+    name: opts.name || 'Slab',
+    reinforcement: opts.reinforcement || '',
+    notes: opts.notes || '',
+  };
+}
+
+/** A structural line member: girder, header, ridge, joist band. */
+export function makeBeam(a, b, layer, opts = {}) {
+  return {
+    id: uid('bm'),
+    type: 'beam',
+    layer,
+    a: g.clone(a),
+    b: g.clone(b),
+    size: opts.size || '2x10',
+    plies: opts.plies ?? 2,
+    material: opts.material || 'spf-2',
+    elevation: opts.elevation ?? 96,
+    tag: opts.tag || '',
+    notes: opts.notes || '',
+  };
+}
+
 export function makePart(a, b, layer, opts = {}) {
   return {
     id: uid('pt'),
@@ -125,6 +238,45 @@ export function makePart(a, b, layer, opts = {}) {
     qty: opts.qty ?? 1,
     notes: opts.notes || '',
   };
+}
+
+/** The eave edge of a roof plane, as a segment. */
+export function roofEaveEdge(plane) {
+  const i = Math.max(0, Math.min(plane.eave || 0, plane.pts.length - 1));
+  return [plane.pts[i], plane.pts[(i + 1) % plane.pts.length]];
+}
+
+/**
+ * Height of a roof plane above the floor at a plan point. The plane rises
+ * perpendicular to its eave edge at the given pitch.
+ */
+export function roofHeightAt(plane, point) {
+  const [a, b] = roofEaveEdge(plane);
+  const edge = g.sub(b, a);
+  const length = g.len(edge);
+  if (length < g.EPS) return plane.eaveHeight;
+  // Perpendicular distance from the eave line, taken positive into the plane.
+  const signed = g.cross(edge, g.sub(point, a)) / length;
+  const centroid = g.polygonCentroid(plane.pts);
+  const inward = Math.sign(g.cross(edge, g.sub(centroid, a)) / length) || 1;
+  const run = signed * inward;
+  return plane.eaveHeight + (Math.max(0, run) * (plane.pitch || 0)) / 12;
+}
+
+/** Ridge height of a plane: the highest point of its outline. */
+export function roofRidgeHeight(plane) {
+  return plane.pts.reduce((max, p) => Math.max(max, roofHeightAt(plane, p)), plane.eaveHeight);
+}
+
+/** Sloped area of a roof plane, which is what you buy shingles by. */
+export function roofPlaneArea(plane) {
+  const flat = Math.abs(g.polygonArea(plane.pts));
+  const pitch = plane.pitch || 0;
+  return flat * Math.sqrt(1 + (pitch / 12) ** 2);
+}
+
+export function footingLength(footing) {
+  return footing.kind === 'pad' ? footing.length || footing.width : g.dist(footing.a, footing.b);
 }
 
 export function findEntity(page, id) {
@@ -220,12 +372,54 @@ export function outlines(ent, page) {
       return [{ pts: [ent.a, ent.b], closed: false }];
     case 'text':
       return [{ pts: [ent.p], closed: false }];
+    case 'roofPlane':
+    case 'slab':
+      return [{ pts: ent.pts, closed: true }];
+    case 'footing':
+      if (ent.kind === 'pad') {
+        const half = (ent.length || ent.width) / 2;
+        const halfW = ent.width / 2;
+        return [
+          {
+            pts: g.rectCorners(
+              g.vec(ent.a.x - halfW, ent.a.y - half),
+              g.vec(ent.a.x + halfW, ent.a.y + half)
+            ),
+            closed: true,
+          },
+        ];
+      }
+      return [{ pts: g.thickSegmentQuad(ent.a, ent.b, ent.width), closed: true }];
+    case 'beam':
+      return [{ pts: g.thickSegmentQuad(ent.a, ent.b, beamWidth(ent)), closed: true }];
+    case 'fixture': {
+      const half = 0;
+      void half;
+      return [{ pts: [ent.p], closed: false }];
+    }
     default:
       return [];
   }
 }
 
+/** Plotted width of a beam in plan, from its size and ply count. */
+export function beamWidth(beam) {
+  const plies = Math.max(1, beam.plies || 1);
+  const nominal = String(beam.size || '2x10').split('x')[0];
+  const dressed = Number(nominal) >= 4 ? Number(nominal) - 0.5 : 1.5;
+  return dressed * plies;
+}
+
 export function bboxOf(ent, page) {
+  if (ent.type === 'fixture') {
+    // Without the symbol library a fixture is a point; the renderer passes a
+    // real footprint when it has one.
+    const reach = (ent.footprint || 12) * (ent.scale || 1);
+    return g.bboxOfPoints([
+      g.vec(ent.p.x - reach, ent.p.y - reach),
+      g.vec(ent.p.x + reach, ent.p.y + reach),
+    ]);
+  }
   if (ent.type === 'text') {
     const w = ent.text.length * ent.size * 0.6;
     return g.bboxOfPoints([ent.p, g.vec(ent.p.x + w, ent.p.y - ent.size)]);
@@ -250,9 +444,13 @@ export function bboxOfMany(entities, page) {
   return box;
 }
 
-const FILLED = new Set(['room', 'wall', 'part', 'opening']);
+const FILLED = new Set(['room', 'wall', 'part', 'opening', 'slab', 'roofPlane', 'footing', 'beam']);
 
 export function hitTest(ent, page, pt, tol) {
+  if (ent.type === 'fixture') {
+    const reach = Math.max(tol, ((ent.footprint || 12) * (ent.scale || 1)) / 2);
+    return g.dist(ent.p, pt) <= reach;
+  }
   if (ent.type === 'text') {
     const box = g.bboxExpand(bboxOf(ent, page), tol);
     return g.bboxContainsPoint(box, pt);
@@ -315,13 +513,25 @@ export function snapPoints(ent, page) {
       push(g.vec(ent.c.x + Math.cos(ent.a1) * ent.r, ent.c.y + Math.sin(ent.a1) * ent.r), 'endpoint');
       break;
     case 'polyline':
-    case 'room': {
+    case 'room':
+    case 'slab':
+    case 'roofPlane': {
       const pts = ent.pts;
       pts.forEach((p) => push(p, 'endpoint'));
-      const n = ent.closed || ent.type === 'room' ? pts.length : pts.length - 1;
+      const closed = ent.closed || ent.type !== 'polyline';
+      const n = closed ? pts.length : pts.length - 1;
       for (let i = 0; i < n; i += 1) push(g.lerp(pts[i], pts[(i + 1) % pts.length], 0.5), 'midpoint');
       break;
     }
+    case 'footing':
+    case 'beam':
+      push(ent.a, 'endpoint');
+      push(ent.b, 'endpoint');
+      push(g.lerp(ent.a, ent.b, 0.5), 'midpoint');
+      break;
+    case 'fixture':
+      push(ent.p, 'center');
+      break;
     case 'text':
       push(ent.p, 'endpoint');
       break;
@@ -348,6 +558,8 @@ export function translate(ent, d) {
     case 'part':
     case 'dim':
     case 'wall':
+    case 'footing':
+    case 'beam':
       ent.a = move(ent.a);
       ent.b = move(ent.b);
       break;
@@ -357,9 +569,12 @@ export function translate(ent, d) {
       break;
     case 'polyline':
     case 'room':
+    case 'slab':
+    case 'roofPlane':
       ent.pts = ent.pts.map(move);
       break;
     case 'text':
+    case 'fixture':
       ent.p = move(ent.p);
       break;
     case 'opening':
@@ -376,6 +591,8 @@ export function handlesOf(ent, page) {
     case 'line':
     case 'wall':
     case 'dim':
+    case 'footing':
+    case 'beam':
       return [
         { name: 'a', p: ent.a },
         { name: 'b', p: ent.b },
@@ -399,8 +616,11 @@ export function handlesOf(ent, page) {
       return [{ name: 'c', p: ent.c }];
     case 'polyline':
     case 'room':
+    case 'slab':
+    case 'roofPlane':
       return ent.pts.map((p, i) => ({ name: `p${i}`, p }));
     case 'text':
+    case 'fixture':
       return [{ name: 'p', p: ent.p }];
     case 'opening': {
       const f = openingFrame(ent, page);
@@ -416,6 +636,8 @@ export function moveHandle(ent, name, target, page) {
     case 'line':
     case 'wall':
     case 'dim':
+    case 'footing':
+    case 'beam':
       if (name === 'a') ent.a = g.clone(target);
       if (name === 'b') ent.b = g.clone(target);
       break;
@@ -439,12 +661,15 @@ export function moveHandle(ent, name, target, page) {
       if (name === 'c') ent.c = g.clone(target);
       break;
     case 'polyline':
-    case 'room': {
+    case 'room':
+    case 'slab':
+    case 'roofPlane': {
       const i = Number(name.slice(1));
       if (Number.isInteger(i) && ent.pts[i]) ent.pts[i] = g.clone(target);
       break;
     }
     case 'text':
+    case 'fixture':
       ent.p = g.clone(target);
       break;
     case 'opening': {

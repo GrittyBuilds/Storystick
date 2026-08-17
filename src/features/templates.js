@@ -10,6 +10,7 @@ import {
   makePart,
   makeRect,
 } from '../core/entities.js';
+import { sampleHouse } from './house-template.js';
 
 const pt = (x, y) => ({ x, y });
 
@@ -239,6 +240,14 @@ export const TEMPLATES = [
     category: 'Building',
     description: 'Empty plan sheet with construction layers ready to go.',
     build: blankBuilding,
+  },
+  {
+    id: 'sample-house',
+    name: 'Sample house on a basement',
+    category: 'Building',
+    description:
+      '40 × 28 ranch, three bedrooms and a full basement — a seven-sheet set with foundation, framing, roof and E/P/M plans.',
+    build: sampleHouse,
   },
   {
     id: 'shed',
