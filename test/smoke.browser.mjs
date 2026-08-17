@@ -331,9 +331,84 @@ try {
   const panelFields = await page.evaluate(() =>
     [...document.querySelectorAll('#panel-properties .field-label')].map((n) => n.textContent)
   );
-  check('the properties panel offers a set-angle and a turn-by control', () => {
-    assert.ok(panelFields.includes('Set to'), `fields were ${panelFields.join(', ')}`);
+  check('the sidebar offers length and angle for a selected wall', () => {
+    assert.ok(panelFields.includes('Length'), `fields were ${panelFields.join(', ')}`);
+    assert.ok(panelFields.includes('Set to'));
     assert.ok(panelFields.includes('Turn by'));
+  });
+
+  // Typing into the sidebar's Length box actually resizes the wall.
+  const resized = await page.evaluate(async (id) => {
+    const app = window.storystick;
+    const labels = [...document.querySelectorAll('#panel-properties .field')];
+    const lengthField = labels.find(
+      (f) => f.querySelector('.field-label') && f.querySelector('.field-label').textContent === 'Length'
+    );
+    const input = lengthField.querySelector('input');
+    const wall = app.page.entities.find((e) => e.id === id);
+    const startA = { ...wall.a };
+    const startAngle = Math.atan2(wall.b.y - wall.a.y, wall.b.x - wall.a.x);
+    input.value = "10'-0\"";
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    const after = app.page.entities.find((e) => e.id === id);
+    return {
+      length: Math.hypot(after.b.x - after.a.x, after.b.y - after.a.y),
+      angle: Math.atan2(after.b.y - after.a.y, after.b.x - after.a.x),
+      startAngle,
+      movedStart: after.a.x !== startA.x || after.a.y !== startA.y,
+    };
+  }, wallStart.id);
+  check('editing Length in the sidebar resizes the wall', () =>
+    assert.ok(Math.abs(resized.length - 120) < 1e-6, `length is ${resized.length}`)
+  );
+  check('resizing holds the start end and keeps the angle', () => {
+    assert.equal(resized.movedStart, false);
+    assert.ok(Math.abs(resized.angle - resized.startAngle) < 1e-9);
+  });
+
+  // A typed length with something selected resizes it too.
+  await page.fill('#command-input', "20'");
+  await page.press('#command-input', 'Enter');
+  await sleep(150);
+  const typedLength = await page.evaluate((id) => {
+    const wall = window.storystick.page.entities.find((e) => e.id === id);
+    return Math.hypot(wall.b.x - wall.a.x, wall.b.y - wall.a.y);
+  }, wallStart.id);
+  check('typing a length with something selected resizes it', () =>
+    assert.ok(Math.abs(typedLength - 240) < 1e-6, `length is ${typedLength}`)
+  );
+
+  // Openings must not end up hanging off a shortened wall.
+  const openingHeld = await page.evaluate(async () => {
+    const { makeWall, makeOpening } = await import('/src/core/entities.js');
+    const app = window.storystick;
+    const wall = app.add(makeWall({ x: 0, y: 400 }, { x: 200, y: 400 }, 'walls', 5.5), 'Test wall');
+    const door = app.add(makeOpening(wall.id, 0.92, 'openings', 'door', 36), 'Test door');
+    app.setSelection([wall.id]);
+    app.runCommand('50');
+    const w = app.page.entities.find((e) => e.id === wall.id);
+    const d = app.page.entities.find((e) => e.id === door.id);
+    const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    const centre = d.t * len;
+    return { len, start: centre - d.width / 2, end: centre + d.width / 2 };
+  });
+  check('an opening stays inside a wall that was shortened under it', () => {
+    assert.ok(Math.abs(openingHeld.len - 50) < 1e-6);
+    assert.ok(openingHeld.start >= -1e-6, `door starts at ${openingHeld.start}`);
+    assert.ok(openingHeld.end <= openingHeld.len + 1e-6, `door ends at ${openingHeld.end}`);
+  });
+
+  // A room has no single length, so the box is not offered at all.
+  const roomFields = await page.evaluate(() => {
+    const app = window.storystick;
+    const room = app.page.entities.find((e) => e.type === 'room');
+    app.setSelection([room.id]);
+    app.refreshAll();
+    return [...document.querySelectorAll('#panel-properties .field-label')].map((n) => n.textContent);
+  });
+  check('a room is not offered a length it does not have', () => {
+    assert.ok(!roomFields.includes('Length'), `fields were ${roomFields.join(', ')}`);
+    assert.ok(roomFields.includes('Turn by'), 'a room should still be turnable');
   });
 
   // A part is axis-aligned, so rotating it is refused rather than faked.

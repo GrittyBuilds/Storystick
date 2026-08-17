@@ -29,8 +29,8 @@ local storage automatically, and can be exported to a `.storystick` file to
 move between machines.
 
 ```bash
-npm test              # 283 unit tests — units, geometry, documents, transforms, sheets, symbols, 3D, codes, structural
-npm run smoke         # 43 end-to-end browser checks (needs the optional playwright dep)
+npm test              # 294 unit tests — units, geometry, documents, transforms, sheets, symbols, 3D, codes, structural
+npm run smoke         # 48 end-to-end browser checks (needs the optional playwright dep)
 npm run smoke:mobile  # 9 checks on a phone and tablet viewport
 ```
 
@@ -199,12 +199,22 @@ only one wall. The same goes for the plumbing, mechanical and framing sheets.
   dimension. `Shift` takes ten steps, `Alt` one grid square. A burst of taps is
   one undo, not fifty. Doors and windows are hosted, so they slide *along* their
   wall rather than floating off it.
+- **Edit length and angle in the sidebar.** Select anything and Properties gets
+  a **Geometry** section: **Length** for anything that runs from one end to
+  another (walls, lines, beams, footings, dimensions), **Set to** for its
+  bearing, and **Turn by** with ↺/↻ 90° buttons. Resizing holds the *start* end
+  still — the same end an angle change pivots about — so setting a length and
+  then an angle only ever moves the end you did not place. Openings ride their
+  wall as it resizes and are pushed back inside if it gets too short to hold
+  them. Rectangles get width and height, circles a radius and diameter, and a
+  placed symbol its real plotted size.
 - **Type an angle.** With something selected, `<45` points it at 45°, turning
   about the end it started from so the end you placed stays put and the length
   does not change. A sign makes it relative: `<+15` turns fifteen degrees
   further. Angles have to say they are angles — `<45` or `45°` — so a bare `45`
-  is still 45 inches and cannot rotate a wall by accident. The same two controls
-  sit in Properties as **Set to** and **Turn by**, with ↺/↻ 90° buttons.
+  is still 45 inches. And that bare `45` is not wasted: with one object selected
+  it sets its **length**, so the command bar resizes and re-aims the same thing
+  the sidebar does.
 - **Units.** Imperial with real fractions (down to 1/64") or metric — switch
   the whole project at any time in Settings; every label reformats.
 

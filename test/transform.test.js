@@ -21,7 +21,10 @@ import {
   makeFixture,
   makeText,
   makeDim,
+  makeOpening,
   entityAngle,
+  entityLength,
+  setEntityLength,
   setEntityAngle,
   rotateEntity,
   rotationPivot,
@@ -165,6 +168,108 @@ test('setting a symbol angle turns it in place', () => {
 test('an angle cannot be set on a shape that has none', () => {
   const room = makeRoom([pt(0, 0), pt(10, 0), pt(10, 10)], 'rooms');
   assert.equal(setEntityAngle(room, toRadians(45), { entities: [] }), false);
+});
+
+// --- setting a length ------------------------------------------------------
+
+test('a wall, line, beam and dimension all report a length', () => {
+  assert.equal(entityLength(makeWall(pt(0, 0), pt(100, 0), 'walls')), 100);
+  assert.equal(entityLength(makeLine(pt(0, 0), pt(0, 30), 'sketch')), 30);
+  assert.equal(entityLength(makeBeam(pt(0, 0), pt(144, 0), 'structure', {})), 144);
+  assert.equal(entityLength(makeDim(pt(0, 0), pt(48, 0), 'dimensions')), 48);
+  assert.equal(entityLength(makeFooting(pt(0, 0), pt(60, 0), 'footings', {})), 60);
+});
+
+test('shapes with no single length say so rather than offering a wrong one', () => {
+  // A room has a perimeter and a slab has an area; neither is a length you
+  // could type one number into.
+  assert.equal(entityLength(makeRoom([pt(0, 0), pt(10, 0), pt(10, 10)], 'rooms')), null);
+  assert.equal(entityLength(makeSlab([pt(0, 0), pt(10, 0), pt(10, 10)], 'slab', {})), null);
+  assert.equal(entityLength(makeCircle(pt(0, 0), 5, 'sketch')), null);
+  assert.equal(entityLength(makePadFooting(pt(0, 0), 'footings', {})), null);
+  assert.equal(entityLength(makeFixture('e-recep', pt(0, 0), 'electrical', {})), null);
+  assert.equal(entityLength(null), null);
+});
+
+test('setting a length holds the start end still and keeps the direction', () => {
+  const wall = makeWall(pt(50, 50), pt(50, 150), 'walls');
+  const before = entityAngle(wall);
+  assert.ok(setEntityLength(wall, 240));
+  assert.deepEqual(wall.a, { x: 50, y: 50 });
+  assert.equal(entityLength(wall), 240);
+  assert.ok(near(entityAngle(wall), before));
+  assert.ok(near(wall.b.y, 290));
+});
+
+test('a diagonal keeps its angle exactly when it is resized', () => {
+  const line = makeLine(pt(0, 0), pt(30, 40), 'sketch'); // 50 long, 3-4-5
+  const before = entityAngle(line);
+  setEntityLength(line, 100);
+  assert.ok(near(entityLength(line), 100, 1e-9));
+  assert.ok(near(entityAngle(line), before, 1e-12));
+  assert.ok(near(line.b.x, 60, 1e-9));
+  assert.ok(near(line.b.y, 80, 1e-9));
+});
+
+test('a length that makes no sense is refused, leaving the entity alone', () => {
+  const wall = makeWall(pt(0, 0), pt(100, 0), 'walls');
+  for (const bad of [0, -50, NaN, Infinity, null, undefined]) {
+    assert.equal(setEntityLength(wall, bad), false, `${bad} should be refused`);
+    assert.equal(entityLength(wall), 100);
+  }
+});
+
+test('a zero-length entity cannot be stretched, because it points nowhere', () => {
+  const degenerate = makeLine(pt(10, 10), pt(10, 10), 'sketch');
+  assert.equal(setEntityLength(degenerate, 50), false);
+});
+
+test('a length cannot be set on a shape that has none', () => {
+  const room = makeRoom([pt(0, 0), pt(10, 0), pt(10, 10)], 'rooms');
+  const before = JSON.stringify(room);
+  assert.equal(setEntityLength(room, 100), false);
+  assert.equal(JSON.stringify(room), before);
+});
+
+test('openings ride a resized wall and stay inside it', () => {
+  const wall = makeWall(pt(0, 0), pt(200, 0), 'walls');
+  const door = makeOpening(wall.id, 0.9, 'openings', 'door', 36);
+  const page = { entities: [wall, door] };
+
+  // Shortening the wall must not leave the door hanging off the end.
+  setEntityLength(wall, 50, page);
+  const half = door.width / 2 / 50;
+  assert.ok(door.t >= half - 1e-9 && door.t <= 1 - half + 1e-9, `t is ${door.t}`);
+  const centre = door.t * 50;
+  assert.ok(centre - door.width / 2 >= -1e-9, 'door starts before the wall does');
+  assert.ok(centre + door.width / 2 <= 50 + 1e-9, 'door runs past the end of the wall');
+});
+
+test('an opening that already fits is left where it was', () => {
+  const wall = makeWall(pt(0, 0), pt(200, 0), 'walls');
+  const door = makeOpening(wall.id, 0.5, 'openings', 'door', 36);
+  const page = { entities: [wall, door] };
+  setEntityLength(wall, 400, page);
+  assert.equal(door.t, 0.5, 'a door in the middle should not have been moved');
+});
+
+test('a wall too short for its opening centres it rather than going negative', () => {
+  const wall = makeWall(pt(0, 0), pt(200, 0), 'walls');
+  const door = makeOpening(wall.id, 0.9, 'openings', 'door', 36);
+  const page = { entities: [wall, door] };
+  setEntityLength(wall, 12, page); // narrower than the 36" door
+  assert.equal(door.t, 0.5);
+  assert.ok(Number.isFinite(door.t));
+});
+
+test('length and angle compose: setting one does not disturb the other', () => {
+  const wall = makeWall(pt(20, 20), pt(120, 20), 'walls');
+  setEntityLength(wall, 180);
+  setEntityAngle(wall, toRadians(30), { entities: [] });
+  assert.ok(near(entityLength(wall), 180, 1e-9), `length drifted to ${entityLength(wall)}`);
+  assert.ok(near(toDegrees(entityAngle(wall)), 30, 1e-9));
+  // Both operations pivot about the same end, so it never moves.
+  assert.deepEqual(wall.a, { x: 20, y: 20 });
 });
 
 // --- turning by a delta ----------------------------------------------------

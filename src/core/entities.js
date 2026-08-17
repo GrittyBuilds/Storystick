@@ -687,6 +687,46 @@ export function rotateEntity(ent, delta, pivot) {
 }
 
 /**
+ * How long an entity is, or null if "length" is not a thing it has. A room has
+ * a perimeter and a slab has an area, but neither has a length you could type a
+ * single number into, so they say so rather than offering a misleading box.
+ */
+export function entityLength(ent) {
+  if (!ent) return null;
+  if (DIRECTIONAL.has(ent.type)) return g.dist(ent.a, ent.b);
+  if (ent.type === 'footing' && ent.kind !== 'pad') return g.dist(ent.a, ent.b);
+  return null;
+}
+
+/**
+ * Resize along the direction it already points, holding the start end still —
+ * the same end an angle change pivots about, so typing a length and then an
+ * angle moves the one end you did not place.
+ *
+ * Openings are positioned as a fraction of their wall, so they follow a resize
+ * automatically; they are only nudged back inside if the wall got too short to
+ * hold them where they were.
+ * @returns true if it was resized.
+ */
+export function setEntityLength(ent, length, page = null) {
+  if (entityLength(ent) === null) return false;
+  if (!Number.isFinite(length) || length <= 0) return false;
+  const dir = g.norm(g.sub(ent.b, ent.a));
+  if (!dir.x && !dir.y) return false;
+  ent.b = g.add(ent.a, g.mul(dir, length));
+
+  if (ent.type === 'wall' && page) {
+    for (const opening of openingsForWall(page, ent.id)) {
+      const half = opening.width / 2 / length;
+      // A wall shorter than the opening cannot hold it at all; centre it and
+      // let the caller's own checks report the impossible geometry.
+      opening.t = half >= 0.5 ? 0.5 : Math.min(1 - half, Math.max(half, opening.t));
+    }
+  }
+  return true;
+}
+
+/**
  * Point an entity at an absolute angle, turning about where it starts so the
  * end a user grabbed stays put. Only entities that have an angle can be set to
  * one — everything else has to be turned by a delta instead.

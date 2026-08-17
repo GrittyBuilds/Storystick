@@ -21,6 +21,8 @@ import {
   canRotate,
   entityAngle,
   setEntityAngle,
+  entityLength,
+  setEntityLength,
 } from '../core/entities.js';
 import { layerColor } from '../render/theme.js';
 import * as g from '../core/geometry.js';
@@ -446,6 +448,20 @@ function entityEditor(app, ent) {
         )
       );
       fields.push(field('Tag', textInput(ent.tag || '', (v) => { ent.tag = v; change('Tag fixture'); })));
+      if (symbol) {
+        // Symbols are drawn at a real size, so scale is shown as the size it
+        // actually plots at rather than as a bare multiplier.
+        fields.push(
+          field(
+            'Size',
+            lengthInput(app, (symbol.widthIn || 12) * (ent.scale || 1), (v) => {
+              ent.scale = Math.max(0.05, v / (symbol.widthIn || 12));
+              change('Resize fixture');
+            }),
+            `across · ${Math.round((ent.scale || 1) * 100)}% of nominal`
+          )
+        );
+      }
       fields.push(
         el('button', {
           class: 'btn tiny',
@@ -676,11 +692,42 @@ function entityEditor(app, ent) {
       );
       break;
 
+    case 'rect': {
+      // A rectangle is two opposite corners, so its size is editable directly
+      // even though its angle is not.
+      const resize = (w, h) => {
+        const sx = ent.b.x < ent.a.x ? -1 : 1;
+        const sy = ent.b.y < ent.a.y ? -1 : 1;
+        ent.b = { x: ent.a.x + w * sx, y: ent.a.y + h * sy };
+      };
+      const w = Math.abs(ent.b.x - ent.a.x);
+      const h = Math.abs(ent.b.y - ent.a.y);
+      fields.push(
+        field('Width', lengthInput(app, w, (v) => {
+          resize(v, Math.abs(ent.b.y - ent.a.y));
+          change('Resize rectangle');
+        }))
+      );
+      fields.push(
+        field('Height', lengthInput(app, h, (v) => {
+          resize(Math.abs(ent.b.x - ent.a.x), v);
+          change('Resize rectangle');
+        }))
+      );
+      break;
+    }
+
     case 'circle':
       fields.push(
         field('Radius', lengthInput(app, ent.r, (v) => {
           ent.r = v;
           change('Change radius');
+        }))
+      );
+      fields.push(
+        field('Diameter', lengthInput(app, ent.r * 2, (v) => {
+          ent.r = v / 2;
+          change('Change diameter');
         }))
       );
       break;
@@ -718,11 +765,31 @@ function rotationEditor(app, ids) {
   const entities = ids.map((id) => app.page.entities.find((e) => e.id === id)).filter(Boolean);
   if (!entities.length) return [];
   const out = [];
+  const single = entities.length === 1 ? entities[0] : null;
+
+  out.push(el('div', { class: 'prop-subhead', text: 'Geometry' }));
+
+  // Length comes first: it is the number people reach for most, and it holds
+  // the start end still, the same end an angle change pivots about.
+  const length = single ? entityLength(single) : null;
+  if (length !== null) {
+    out.push(
+      field(
+        'Length',
+        lengthInput(app, length, (v) => {
+          setEntityLength(single, v, app.page);
+          app.touch('Set length');
+          app.refreshAll();
+          app.render();
+        }),
+        'measured along the run, from the start end'
+      )
+    );
+  }
 
   const blocked = entities.filter((e) => !canRotate(e));
   if (blocked.length) {
     const names = [...new Set(blocked.map((e) => ENTITY_LABELS[e.type] || e.type))].join(' and ');
-    out.push(el('div', { class: 'prop-subhead', text: 'Angle' }));
     out.push(
       el('p', {
         class: 'muted small',
@@ -732,9 +799,6 @@ function rotationEditor(app, ids) {
     return out;
   }
 
-  out.push(el('div', { class: 'prop-subhead', text: 'Angle' }));
-
-  const single = entities.length === 1 ? entities[0] : null;
   const current = single ? entityAngle(single) : null;
   if (current !== null) {
     out.push(

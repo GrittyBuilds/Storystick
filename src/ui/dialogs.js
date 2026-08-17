@@ -942,6 +942,7 @@ export function helpDialog() {
     ['Q', 'Place a plan symbol — R rotates it, F flips it'],
     ['M / T / E', 'Dimension / Text / Measure'],
     ['Type a number + Enter', 'Exact length while drawing (e.g. 8\' or 8\'-6 1/2" or 48 x 24)'],
+    ['Type a number + Enter (selected)', 'Set the length of the selected wall, line or beam'],
     ['Arrow keys', 'Nudge the selection by one fraction-precision step'],
     ['Shift + arrow', 'Nudge ten steps · Alt + arrow nudges one grid square'],
     ['Type <45 + Enter', 'Point the selected wall or symbol at 45°'],

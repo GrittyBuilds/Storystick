@@ -1,6 +1,16 @@
 import { Tool } from './tool.js';
 import * as g from '../core/geometry.js';
-import { hitTest, handlesOf, translate, moveHandle, bboxOf } from '../core/entities.js';
+import {
+  hitTest,
+  handlesOf,
+  translate,
+  moveHandle,
+  bboxOf,
+  findEntity,
+  entityLength,
+  setEntityLength,
+  ENTITY_LABELS,
+} from '../core/entities.js';
 
 const MODE = { NONE: 0, MOVE: 1, GRIP: 2, MARQUEE: 3 };
 
@@ -169,8 +179,33 @@ export class SelectTool extends Tool {
     if (ent) this.app.editEntityInline(ent);
   }
 
+  /**
+   * With one thing selected, a typed length resizes it — the same number the
+   * sidebar's Length box takes, for people who would rather not reach for the
+   * mouse. It holds the start end still, exactly as the sidebar does.
+   */
   applyNumeric(values) {
-    if (this.mode !== MODE.MOVE || !values.length) return false;
-    return false;
+    if (!values.length) return false;
+    const ids = [...this.app.selection];
+    if (ids.length !== 1) {
+      if (ids.length > 1) {
+        this.app.setStatus('Select one object to set its length — a typed length resizes one thing.', true);
+      }
+      return false;
+    }
+    const ent = findEntity(this.page, ids[0]);
+    if (!ent || entityLength(ent) === null) {
+      if (ent) {
+        this.app.setStatus(
+          `A ${(ENTITY_LABELS[ent.type] || ent.type).toLowerCase()} has no single length to set — use the Properties panel.`,
+          true
+        );
+      }
+      return false;
+    }
+    if (!setEntityLength(ent, values[0], this.page)) return false;
+    this.app.commit('Set length');
+    this.app.setStatus(`Length set to ${this.app.fmt(values[0])}.`);
+    return true;
   }
 }
